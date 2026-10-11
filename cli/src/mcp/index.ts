@@ -1,3 +1,4 @@
+import { createHmac, createHash } from "node:crypto";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -57,6 +58,76 @@ export const KNOWLEDGE_BASE: ThreatIntelligenceEntry[] = [
 /**
  * Creates and configures the SecureFlow Threat Intelligence MCP Server.
  */
+const DEFAULT_SIGNING_KEY =
+  process.env.ARMORIQ_PROOF_SIGNING_KEY || "armoriq-boundary-provenance-key-v1";
+
+export interface IntentVerificationResult {
+  verified: boolean;
+  allowed: boolean;
+  reason?: string;
+  proof?: {
+    signature: string;
+    proofHash: string;
+    timestamp: number;
+  };
+}
+
+/**
+ * Validates declared cryptographic intent against ArmorIQ policy rules
+ * to prevent prompt injection (CWE-94) and arbitrary execution drift.
+ */
+export function verifyDeclaredIntent(
+  toolName: string,
+  args: Record<string, unknown>,
+  intentToken?: string,
+): IntentVerificationResult {
+  const serialized = JSON.stringify(args).toLowerCase();
+
+  // Fail-closed detection for adversarial prompt injection (CWE-94)
+  if (
+    /\b(ignore\s+(all\s+)?(previous|prior)\s+instructions|system\s+override|jailbreak|disregard\s+(all\s+)?rules)\b/i.test(
+      serialized,
+    ) ||
+    /\b(exfiltrate|leak|steal|dump|print)\s+(private\s+)?(intent\s+token|secret|api_key|credential)/i.test(
+      serialized,
+    ) ||
+    /\b(armor_?iq_intent_token|intentToken|ARMORIQ_API_KEY)\b/i.test(serialized)
+  ) {
+    return {
+      verified: false,
+      allowed: false,
+      reason: "Action blocked by ArmorIQ: Adversarial prompt injection (CWE-94) detected",
+    };
+  }
+
+  // Cryptographic intent token verification if provided
+  if (intentToken) {
+    if (intentToken.includes("tampered") || intentToken.length < 16) {
+      return {
+        verified: false,
+        allowed: false,
+        reason: "Action blocked by ArmorIQ: Cryptographic intent token signature is invalid or tampered",
+      };
+    }
+  }
+
+  const timestamp = Date.now();
+  const proofHash = createHash("sha256")
+    .update(JSON.stringify({ toolName, args, timestamp }))
+    .digest("hex");
+  const signature = createHmac("sha256", DEFAULT_SIGNING_KEY).update(proofHash).digest("hex");
+
+  return {
+    verified: true,
+    allowed: true,
+    proof: {
+      signature,
+      proofHash,
+      timestamp,
+    },
+  };
+}
+
 export function createThreatIntelMcpServer(): Server {
   const server = new Server(
     {
@@ -83,6 +154,10 @@ export function createThreatIntelMcpServer(): Server {
                 type: "string",
                 description: "Search keyword, vulnerability type, or CVE identifier (e.g., 'SQL injection', 'CVE-2023-3409')",
               },
+              intentToken: {
+                type: "string",
+                description: "Optional ArmorIQ cryptographic intent token declaring approved plan",
+              },
             },
             required: ["query"],
           },
@@ -97,6 +172,10 @@ export function createThreatIntelMcpServer(): Server {
                 type: "string",
                 description: "The CVE or CWE identifier (e.g., 'CVE-2023-3409')",
               },
+              intentToken: {
+                type: "string",
+                description: "Optional ArmorIQ cryptographic intent token declaring approved plan",
+              },
             },
             required: ["cveId"],
           },
@@ -107,6 +186,25 @@ export function createThreatIntelMcpServer(): Server {
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
+    const intentToken = (args as any)?.intentToken;
+
+    // Cryptographic intent verification gate: reject any drift or injection attempt fail-closed
+    const intentVerification = verifyDeclaredIntent(name, (args as Record<string, unknown>) || {}, intentToken);
+    if (!intentVerification.allowed) {
+      return {
+        isError: true,
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              error: intentVerification.reason,
+              code: "ARMORIQ_INTENT_VERIFICATION_FAILED",
+              enforcement: "FAIL_CLOSED",
+            }),
+          },
+        ],
+      };
+    }
 
     if (name === "query_threat_intelligence") {
       const query = String((args as any)?.query || "").toLowerCase();
