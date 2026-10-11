@@ -4,9 +4,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Mocks
 // ---------------------------------------------------------------------------
 
-const mockRedisGet = vi.fn();
-const mockRedisSet = vi.fn();
-const mockRedisDel = vi.fn();
+const { mockRedisGet, mockRedisSet, mockRedisDel } = vi.hoisted(() => ({
+  mockRedisGet: vi.fn(),
+  mockRedisSet: vi.fn(),
+  mockRedisDel: vi.fn(),
+}));
 
 vi.mock("@/lib/redis", () => ({
   redis: {
@@ -39,8 +41,24 @@ import {
 // ---------------------------------------------------------------------------
 
 const TEMPLATES = [
-  { id: "tpl-1", name: "Block Secrets", description: "...", severity: "CRITICAL", action: "DENY", rules: {}, isDefault: true },
-  { id: "tpl-2", name: "SQL Injection", description: "...", severity: "HIGH", action: "REVIEW REQUIRED", rules: {}, isDefault: false },
+  {
+    id: "tpl-1",
+    name: "Block Secrets",
+    description: "...",
+    severity: "CRITICAL",
+    action: "DENY",
+    rules: {},
+    isDefault: true,
+  },
+  {
+    id: "tpl-2",
+    name: "SQL Injection",
+    description: "...",
+    severity: "HIGH",
+    action: "REVIEW REQUIRED",
+    rules: {},
+    isDefault: false,
+  },
 ];
 
 const TOGGLES_ENABLE_BOTH = [
@@ -48,9 +66,7 @@ const TOGGLES_ENABLE_BOTH = [
   { policyTemplateId: "tpl-2", isActive: true },
 ];
 
-const CACHED_POLICIES = JSON.stringify([
-  { id: "tpl-1", name: "Block Secrets", isActive: true },
-]);
+const CACHED_POLICIES = JSON.stringify([{ id: "tpl-1", name: "Block Secrets", isActive: true }]);
 
 beforeEach(() => {
   vi.clearAllMocks();

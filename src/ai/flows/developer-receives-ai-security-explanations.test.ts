@@ -14,6 +14,7 @@ vi.mock("@/ai/genkit", () => ({
   securityExplanationModel: "mock-groq-model-id",
   getAiInstance: vi.fn(() => ({ generate: mockGenerate })),
   getDefaultModelRef: vi.fn(() => "mock-model"),
+  getSecurityExplanationModelChain: vi.fn(() => ["mock-model"]),
 }));
 
 vi.mock("dotenv/config", () => ({}));
