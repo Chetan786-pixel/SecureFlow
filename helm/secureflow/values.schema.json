@@ -1815,7 +1815,7 @@
           "type": "string"
         }
       },
-      "description": "Legacy app Service settings used by the service and ServiceMonitor templates."
+      "description": "Metrics Service settings used by the optional ServiceMonitor."
     }
   }
 }

@@ -17,6 +17,7 @@ spec:
   selector:
     matchLabels:
       {{- include "secureflow.selectorLabels" . | nindent 6 }}
+      secureflow-metrics: "true"
   namespaceSelector:
     matchNames:
       - {{ .Release.Namespace }}
