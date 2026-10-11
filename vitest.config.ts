@@ -28,7 +28,7 @@ export default defineConfig({
     testTimeout: 15000,
     coverage: {
       provider: "v8",
-      reporter: ["text", "lcov"],
+      reporter: ["text", "lcov", "json-summary", "json", "html"],
       include: ["src/**/*.ts", "src/**/*.tsx"],
       exclude: ["src/**/*.test.ts", "src/**/*.test.tsx", "src/app/**", "src/components/**"],
       thresholds: {
