@@ -26,6 +26,8 @@ id_ed25519*
 out/
 build/
 dist/
+cli/dist/
+*.map
 
 # Git & CI/CD
 .git
