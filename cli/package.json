@@ -1,20 +1,19 @@
 {
   "name": "secureflow-cli",
-  "version": "2.2.2",
+  "version": "2.3.0",
   "description": "Pre-commit secret logging detector for secure development workflows",
   "main": "./dist/index.js",
   "bin": {
     "secureflow": "dist/index.js"
   },
   "publishConfig": {
-    "access": "public",
-    "provenance": true
+    "access": "public"
   },
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "prepare": "npm run build",
-    "publish": "npm publish --access public",
+    "publish": "npm publish",
     "test": "vitest run",
     "test:e2e": "vitest run src/e2e.test.ts",
     "test:watch": "vitest"
