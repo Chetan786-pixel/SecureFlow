@@ -164,14 +164,13 @@ export function BulkRemediationBar({
 
     eventSource.onerror = (event) => {
       let serverError = "";
-      try {
-        const payload = event?.data;
-        if (typeof payload === "string" && payload) {
-          const data = JSON.parse(payload);
-          serverError = data.error || data.message || "";
+      if ("data" in event && typeof event.data === "string") {
+        try {
+          const payload = JSON.parse(event.data);
+          serverError = payload.error || payload.message || "";
+        } catch {
+          // Native EventSource errors may not contain JSON data.
         }
-      } catch {
-        // Native EventSource errors may not contain JSON data.
       }
 
       const errorMsg = serverError || "SSE connection lost or terminated.";
