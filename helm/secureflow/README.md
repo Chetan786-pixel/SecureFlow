@@ -140,6 +140,13 @@ helm upgrade --install secureflow ./helm/secureflow -f production-values.yaml
 
 ## Configuration Reference
 
+The chart's [`values.schema.json`](./values.schema.json) validates the merged values during
+`helm lint`, `helm template`, `helm install`, and `helm upgrade`. Editors that support
+YAML language server schemas can also use it for completion and type hints. Add
+`# yaml-language-server: $schema=./helm/secureflow/values.schema.json` to the first
+line of a values override file in the repository root; adjust the relative path
+if the file is elsewhere.
+
 | Parameter                    | Description                                     | Default          |
 | ---------------------------- | ----------------------------------------------- | ---------------- |
 | `app.replicaCount`           | Number of Next.js app replicas                  | `2`              |
