@@ -32,6 +32,9 @@
   "files": [
     "dist"
   ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.13.1"
+  },
   "devDependencies": {
     "@types/node": "^26.6.4",
     "typescript": "^6",

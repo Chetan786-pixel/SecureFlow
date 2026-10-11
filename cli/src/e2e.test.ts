@@ -1,4 +1,4 @@
-﻿/**
+/**
  * End-to-End (E2E) Test Suite for SecureFlow CLI binary (#1245).
  *
  * Spawns the compiled CLI binary (dist/index.js) in real subshells against
@@ -110,6 +110,20 @@ describe("CLI End-to-End (E2E) Test Suite (#1245)", () => {
       const res = runCli([], nonGitDir);
       expect(res.status).toBe(1);
       expect(res.stderr).toContain("Git error");
+    });
+
+    it("displays mcp help message with secureflow mcp --help and exits 0", () => {
+      const res = runCli(["mcp", "--help"], CLI_DIR);
+      expect(res.status).toBe(0);
+      expect(res.stdout).toContain("SecureFlow CLI - Threat Intelligence MCP Server");
+      expect(res.stdout).toContain("Usage:");
+      expect(res.stdout).toContain("secureflow mcp [options]");
+    });
+
+    it("displays mcp help message with secureflow mcp -h and exits 0", () => {
+      const res = runCli(["mcp", "-h"], CLI_DIR);
+      expect(res.status).toBe(0);
+      expect(res.stdout).toContain("SecureFlow CLI - Threat Intelligence MCP Server");
     });
   });
 

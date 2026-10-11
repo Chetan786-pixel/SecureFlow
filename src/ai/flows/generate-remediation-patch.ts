@@ -37,7 +37,7 @@ export async function generateRemediationPatch(input: PatchInput): Promise<Patch
 
   let threatIntelContext = "";
   try {
-    const { queryLiveThreatIntelligence } = await import("@/mcp/threat-intel-server");
+    const { queryLiveThreatIntelligence } = await import("../../../cli/src/mcp/index.js");
     threatIntelContext = await queryLiveThreatIntelligence(
       `${validatedInput.findingDescription} ${validatedInput.filePath}`
     );
