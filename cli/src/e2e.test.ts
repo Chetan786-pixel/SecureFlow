@@ -20,7 +20,7 @@ interface RunResult {
   stderr: string;
 }
 
-function runCli(args: string[], cwd: string, env: NodeJS.ProcessEnv = {}): RunResult {
+function runCli(args: string[], cwd: string, env: Record<string, string | undefined> = {}): RunResult {
   const result = spawnSync("node", [BIN_PATH, ...args], {
     cwd,
     encoding: "utf-8",
