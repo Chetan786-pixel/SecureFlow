@@ -10,6 +10,7 @@ import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 import { generateRemediationPatchFlow } from "@/ai/flows/generate-remediation-patch";
 import { MAX_PAGE_SIZE } from "@/lib/findings/query";
+import { withErrorHandler, AppError } from "@/lib/middleware/error-handler";
 
 /**
  * Most findings one request may remediate.
@@ -247,6 +248,8 @@ const handler = async function POST(req: NextRequest) {
 };
 
 export const POST = withRateLimit(
-  handler as (req: NextRequest, ...args: unknown[]) => Promise<NextResponse>,
+  withErrorHandler(handler as (req: NextRequest, ...args: unknown[]) => Promise<NextResponse>, {
+    routeLabel: "findings:bulk-remediate",
+  }) as (req: NextRequest, ...args: unknown[]) => Promise<NextResponse>,
   { ...TIERS.AI_STREAM, keyPrefix: "bulk-remediate:ip" },
 ) as typeof handler;
