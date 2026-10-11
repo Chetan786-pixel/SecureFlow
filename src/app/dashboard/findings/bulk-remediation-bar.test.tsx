@@ -117,7 +117,7 @@ describe("BulkRemediationBar", () => {
     act(() => {
       const res = {
         success: true,
-        status: "GENERATED",
+        status: "completed",
         patch: { patchDiff: "+++ b/src/a.ts", status: "GENERATED" },
         patchDiff: "+++ b/src/a.ts",
         explanation: "explanation",
@@ -157,7 +157,7 @@ describe("BulkRemediationBar", () => {
     act(() => {
       const res = {
         success: true,
-        status: "GENERATED",
+        status: "completed",
         patch: { patchDiff: "+++ b/src/a.ts", status: "GENERATED" },
         patchDiff: "+++ b/src/a.ts",
         explanation: "explanation",
@@ -191,7 +191,7 @@ describe("BulkRemediationBar", () => {
     act(() => {
       const res = {
         success: true,
-        status: "GENERATED",
+        status: "completed",
         patch: { patchDiff: "+++ b/src/a.ts", status: "GENERATED" },
         patchDiff: "+++ b/src/a.ts",
         explanation: "explanation",
