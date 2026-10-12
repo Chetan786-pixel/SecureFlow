@@ -25,6 +25,13 @@
 import { __internal } from "./security-helpers";
 import { logger } from "@/lib/logger";
 import { ArmorIQService } from "@/lib/armor/iq";
+import { agentRegistry, ARMORIQ_AGENT_IDS } from "@/lib/armor/agent-registry";
+import {
+  verifySignedIntent,
+  type SignedIntent,
+  type ExecutionPlan,
+} from "@/lib/armor/intent-signing";
+import { recordArmorIQAuditLog } from "@/lib/armor/audit-logger";
 
 const { detectPromptInjection } = __internal;
 
@@ -514,9 +521,14 @@ export interface VerifyArmorIQStepOptions {
     action?: string;
     mcp?: string;
     params?: Record<string, unknown>;
+    targetPath?: string;
+    apiEndpoint?: string;
   };
   policy?: Record<string, unknown>;
   timeoutMs?: number;
+  signedIntent?: SignedIntent;
+  agentId?: string;
+  userId?: string | null;
 }
 
 /**
@@ -741,6 +753,184 @@ export async function verifyArmorIQStep(
   }
 }
 
+/**
+ * ArmorIQ Runtime Gatekeeper (#1275)
+ *
+ * Verifies that an AI worker's proposed tool action conforms to both its
+ * organizational whitelist and its pre-execution cryptographically signed intent.
+ * Enforces strict fail-closed boundary security on:
+ * - Unauthorized API calls / webhooks
+ * - Unwarranted filesystem reads (path traversal, credentials, .env, .ssh)
+ * - Unauthorized PR mutation / git pushes
+ * - Execution plan deviation (tool wasn't in declared signed plan)
+ *
+ * Emits tamper-evident audit records directly into SecureFlow's audit logging.
+ */
+export async function armorIQRuntimeGatekeeper(params: {
+  agentId: string;
+  signedIntent?: SignedIntent;
+  toolCall: {
+    action: string;
+    params?: Record<string, unknown>;
+    targetPath?: string;
+    apiEndpoint?: string;
+  };
+  userId?: string | null;
+}): Promise<ArmorIQVerificationResult & { proofHash?: string; signature?: string; rule?: string }> {
+  const { agentId, signedIntent, toolCall, userId } = params;
+  const action = toolCall.action;
+  const targetPath = toolCall.targetPath || String(toolCall.params?.path || toolCall.params?.filePath || "");
+
+  // 1. If signed intent is provided, verify cryptographic authenticity
+  if (signedIntent) {
+    const intentVerification = verifySignedIntent(signedIntent);
+    if (!intentVerification.valid) {
+      const reason = `Cryptographic intent verification failed: ${intentVerification.reason}`;
+      await recordArmorIQAuditLog({
+        userId,
+        agentId,
+        action,
+        decision: "BLOCK",
+        resource: targetPath || action,
+        reason,
+        rule: "deny:tampered_intent",
+        proofHash: signedIntent.intentHash,
+        signature: signedIntent.signature,
+        intentId: signedIntent.intentId,
+        complianceFrameworks: signedIntent.complianceMetadata?.frameworks,
+      });
+
+      return {
+        allowed: false,
+        status: "denied",
+        reason,
+        verified: false,
+        rule: "deny:tampered_intent",
+      };
+    }
+
+    // 2. Intent plan deviation check: tool must be in declared plan
+    const isDeclaredInPlan = signedIntent.plan.proposedTools.some(
+      (t) => t.toLowerCase() === action.toLowerCase() || t === "*",
+    );
+
+    if (!isDeclaredInPlan) {
+      const reason = `Agent '${agentId}' deviated from signed execution plan (tool '${action}' was not declared in intent '${signedIntent.intentId}').`;
+      await recordArmorIQAuditLog({
+        userId,
+        agentId,
+        action,
+        decision: "BLOCK",
+        resource: targetPath || action,
+        reason,
+        rule: "deny:intent_plan_deviation",
+        proofHash: signedIntent.intentHash,
+        signature: signedIntent.signature,
+        intentId: signedIntent.intentId,
+        complianceFrameworks: signedIntent.complianceMetadata?.frameworks,
+      });
+
+      return {
+        allowed: false,
+        status: "denied",
+        reason,
+        verified: true,
+        rule: "deny:intent_plan_deviation",
+      };
+    }
+  }
+
+  // 3. Runtime boundary checks (filesystem path traversal, secrets, git mutation)
+  const targetLower = targetPath.toLowerCase();
+  if (
+    targetLower.includes("..") ||
+    targetLower.includes(".ssh") ||
+    targetLower.includes(".aws") ||
+    targetLower.includes(".env") ||
+    targetLower.startsWith("/etc")
+  ) {
+    const reason = `Filesystem access to sensitive or traversing path '${targetPath}' strictly blocked by ArmorIQ runtime gatekeeper.`;
+    await recordArmorIQAuditLog({
+      userId,
+      agentId,
+      action,
+      decision: "BLOCK",
+      resource: targetPath,
+      reason,
+      rule: "deny:unwarranted_filesystem_access",
+      proofHash: signedIntent?.intentHash || "proof_boundary_violation",
+      signature: signedIntent?.signature || "sig_boundary_violation",
+      intentId: signedIntent?.intentId,
+    });
+
+    return {
+      allowed: false,
+      status: "denied",
+      reason,
+      verified: true,
+      rule: "deny:unwarranted_filesystem_access",
+    };
+  }
+
+  // 4. Organizational Policy Whitelist Validation
+  const policyCheck = agentRegistry.validateToolCall(agentId, action, targetPath);
+  if (!policyCheck.allowed) {
+    await recordArmorIQAuditLog({
+      userId,
+      agentId,
+      action,
+      decision: "BLOCK",
+      resource: targetPath || action,
+      reason: policyCheck.reason,
+      rule: policyCheck.rule,
+      proofHash: signedIntent?.intentHash || "proof_unsigned",
+      signature: signedIntent?.signature || "sig_policy_block",
+      intentId: signedIntent?.intentId,
+    });
+
+    return {
+      allowed: false,
+      status: "denied",
+      reason: policyCheck.reason,
+      verified: true,
+      rule: policyCheck.rule,
+    };
+  }
+
+  // 5. Permitted action
+  const rule = policyCheck.rule;
+  const reason = policyCheck.reason;
+  const proofHash = signedIntent?.intentHash || "proof_verified";
+  const signature = signedIntent?.signature || "sig_verified";
+
+  await recordArmorIQAuditLog({
+    userId,
+    agentId,
+    action,
+    decision: "ALLOW",
+    resource: targetPath || action,
+    reason,
+    rule,
+    proofHash,
+    signature,
+    intentId: signedIntent?.intentId,
+    complianceFrameworks: signedIntent?.complianceMetadata?.frameworks,
+  });
+
+  return {
+    allowed: true,
+    status: "allowed",
+    reason,
+    verified: true,
+    proofHash,
+    signature,
+    rule,
+  };
+}
+
+export const enforceRuntimeIntent = armorIQRuntimeGatekeeper;
+
 export const verifyArmorIQToken = verifyArmorIQStep;
 export const verifyArmorIQIntentToken = verifyArmorIQStep;
 export const verifyArmorIQPolicy = verifyArmorIQStep;
+

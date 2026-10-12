@@ -363,3 +363,12 @@ export class InsufficientVRAMError extends Error {
     this.modelsTried = [...modelsTried];
   }
 }
+
+// ── ArmorIQ Pre-Execution Intent Signing (#1275) ──────────────────────────
+export {
+  declareAndSignIntent as emitExecutionPlan,
+  declareAndSignIntent as signAgentIntent,
+  type ExecutionPlan,
+  type SignedIntent,
+} from "@/lib/armor/intent-signing";
+
