@@ -105,6 +105,13 @@ app:
   podAnnotations: {}
 
 # ---------------------------------------------------------------------------
+# Metrics Service used by the optional Prometheus ServiceMonitor (#1143).
+# It targets the same app pods as app.service, with its own named port.
+service:
+  type: ClusterIP
+  port: 9002
+  portName: http
+
 # Prometheus ServiceMonitor (#1143)
 #
 # Enables automatic scraping of /api/metrics/landing by a Prometheus Operator

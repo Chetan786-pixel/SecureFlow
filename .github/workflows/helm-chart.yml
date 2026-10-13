@@ -1,0 +1,33 @@
+name: Helm Chart
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - helm/secureflow/**
+      - scripts/test-helm-chart.sh
+      - .github/workflows/helm-chart.yml
+  push:
+    branches: [main]
+    paths:
+      - helm/secureflow/**
+      - scripts/test-helm-chart.sh
+      - .github/workflows/helm-chart.yml
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v5.0.1
+        with:
+          version: v3.22.0
+
+      - name: Lint and render chart
+        run: bash scripts/test-helm-chart.sh
