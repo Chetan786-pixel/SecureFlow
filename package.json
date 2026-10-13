@@ -91,7 +91,6 @@
     "next": "16.4.0",
     "next-auth": "^5.0.0-beta.32",
     "octokit": "^5.0.5",
-    "patch-package": "^8.0.1",
     "pg": "^8.23.1",
     "react": "^19.2.8",
     "react-countup": "^6.5.3",
@@ -123,6 +122,7 @@
     "@types/react-dom": "^19.2.7",
     "@types/swagger-ui-react": "^5.18.0",
     "@types/uuid": "^11.0.0",
+    "concurrently": "^10.0.6",
     "eslint": "^10.12.0",
     "eslint-config-next": "^16.4.0",
     "genkit-cli": "^1.44.1",
@@ -137,5 +137,9 @@
     "typescript": "^6",
     "vite": "^8.3.4",
     "vitest": "^5.0.3"
+  },
+  "overrides": {
+    "deepmerge-ts": "^8.0.2",
+    "mysql2": "^3.24.4"
   }
 }

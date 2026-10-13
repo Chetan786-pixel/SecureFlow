@@ -114,7 +114,9 @@ COPY --from=prisma-cli --chown=nextjs:nodejs /opt/prisma-cli /opt/prisma-cli
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 
 # Static assets are NOT bundled in standalone — copy them explicitly.
+# Exclude source maps (*.map) to minimize image footprint and protect code privacy.
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+RUN find ./.next/static -name "*.map" -type f -delete 2>/dev/null || true
 
 # Public folder is served as-is by Next.js — also not in standalone.
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public

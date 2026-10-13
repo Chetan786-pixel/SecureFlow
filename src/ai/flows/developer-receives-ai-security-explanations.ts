@@ -132,9 +132,12 @@ export async function developerReceivesAISecurityExplanations(
             );
             continue;
           }
-          throw modelErr;
+          throw new InsufficientVRAMError(modelsToTry.map((m) => getModelId(m)));
         }
-        if (i < modelsToTry.length - 1 && (isRateLimitError(modelErr) || isTimeoutError(modelErr))) {
+        if (
+          i < modelsToTry.length - 1 &&
+          (isRateLimitError(modelErr) || isTimeoutError(modelErr))
+        ) {
           console.warn(
             `[AI_FALLBACK] Model ${getModelId(candidate)} rate-limited or timed out. Switching to fallback model: ${getModelId(modelsToTry[i + 1])}`,
           );

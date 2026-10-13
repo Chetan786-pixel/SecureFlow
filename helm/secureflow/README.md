@@ -147,11 +147,18 @@ YAML language server schemas can also use it for completion and type hints. Add
 line of a values override file in the repository root; adjust the relative path
 if the file is elsewhere.
 
+The chart creates an application Service (`*-app`) and a separate metrics
+Service. The optional ServiceMonitor selects only the metrics Service to avoid
+scraping each app pod twice.
+
 | Parameter                    | Description                                     | Default          |
 | ---------------------------- | ----------------------------------------------- | ---------------- |
 | `app.replicaCount`           | Number of Next.js app replicas                  | `2`              |
 | `app.image.repository`       | Next.js container image repository              | `secureflow/app` |
 | `app.service.port`           | Application service port                        | `9002`           |
+| `service.type`               | Metrics Service type for Prometheus scraping    | `ClusterIP`      |
+| `service.port`               | Metrics Service port                            | `9002`           |
+| `service.portName`           | Named port selected by ServiceMonitor           | `http`           |
 | `app.autoscaling.enabled`    | Enable HorizontalPodAutoscaler for app          | `false`          |
 | `app.podDisruptionBudget.enabled`    | Enable PodDisruptionBudget for app              | `true`           |
 | `app.podDisruptionBudget.minAvailable` | Minimum available app replicas during voluntary disruptions | `1` |

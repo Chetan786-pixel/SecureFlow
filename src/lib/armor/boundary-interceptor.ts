@@ -247,6 +247,24 @@ export class ArmorIQBoundaryInterceptor {
       };
     }
 
+    // 2b. Adversarial Prompt Injection & Intent Token Exfiltration (CWE-94)
+    if (
+      rawType === "prompt_injection" ||
+      /\b(ignore\s+(all\s+)?(previous|prior)\s+instructions|system\s+override|jailbreak|disregard\s+(all\s+)?rules)\b/i.test(
+        prompt || rawCommand,
+      ) ||
+      /\b(exfiltrate|leak|steal|dump|print)\s+(private\s+)?(intent\s+token|secret|api_key|credential)/i.test(
+        prompt || rawCommand,
+      ) ||
+      /\b(armor_?iq_intent_token|intentToken|ARMORIQ_API_KEY)\b/i.test(prompt || rawCommand)
+    ) {
+      return {
+        rule: "deny:prompt_injection_cwe_94",
+        reason: "Adversarial prompt injection attempting to hijack system instructions or exfiltrate private intent tokens (CWE-94) blocked by ArmorIQ boundary enforcement",
+        category: "PROMPT_INJECTION_CWE_94",
+      };
+    }
+
     // 3. Sensitive credentials, SSH keys, cloud tokens
     if (
       rawPath.includes(".ssh") ||
@@ -364,6 +382,16 @@ export class SecureFlowAgent {
    */
   private parsePromptToCommand(prompt: string): AgentCommand {
     const lower = prompt.toLowerCase();
+    if (
+      /ignore\s+(all\s+)?(previous|prior)\s+instructions|system\s+override|jailbreak|disregard\s+(all\s+)?rules|exfiltrate|leak.*token/i.test(
+        lower,
+      )
+    ) {
+      return {
+        type: "prompt_injection",
+        prompt: promptTextSanitize(prompt),
+      };
+    }
 
     if (/shell\.exec|rm\s+-rf|system\.exec|bash|sh\s+-c/i.test(lower)) {
       const matchCmd = prompt.match(/(?:shell\.exec|exec|run)\s+([^\n\r;]+)/i);
