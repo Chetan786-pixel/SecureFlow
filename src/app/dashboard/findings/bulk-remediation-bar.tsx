@@ -112,14 +112,21 @@ export function BulkRemediationBar({
     eventSourceRef.current = eventSource;
 
     eventSource.onmessage = (event) => {
+      if (event.data === "[DONE]") {
+        eventSource.close();
+        eventSourceRef.current = null;
+        return;
+      }
+
       try {
         const data = JSON.parse(event.data);
+        const status = String(data.status ?? "").toLowerCase();
 
         if (typeof data.processed === "number") setProcessed(data.processed);
         if (typeof data.progress === "number") setProgress(data.progress);
         if (data.message) setMessage(data.message);
 
-        if (data.status === "completed") {
+        if (status === "completed") {
           setStatus("completed");
           eventSource.close();
           eventSourceRef.current = null;
@@ -135,7 +142,7 @@ export function BulkRemediationBar({
             title: "Bulk Patch Generated 🛡️",
             description: `Generated combined patch for ${count} ${commonType} findings.`,
           });
-        } else if (data.status === "error") {
+        } else if (status === "error" || status === "failed") {
           setStatus("error");
           eventSource.close();
           eventSourceRef.current = null;
@@ -155,9 +162,19 @@ export function BulkRemediationBar({
       }
     };
 
-    eventSource.onerror = () => {
+    eventSource.onerror = (event) => {
+      let serverError = "";
+      if ("data" in event && typeof event.data === "string") {
+        try {
+          const payload = JSON.parse(event.data);
+          serverError = payload.error || payload.message || "";
+        } catch {
+          // Native EventSource errors may not contain JSON data.
+        }
+      }
+
+      const errorMsg = serverError || "SSE connection lost or terminated.";
       setStatus("error");
-      const errorMsg = "SSE connection lost or terminated.";
       setMessage(errorMsg);
       setError({ message: errorMsg, selectionKey: requestedFor });
 
