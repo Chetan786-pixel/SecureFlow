@@ -112,9 +112,16 @@ export function BulkRemediationBar({
     eventSourceRef.current = eventSource;
 
     eventSource.onmessage = (event) => {
+      if (event.data === "[DONE]") {
+        eventSource.close();
+        eventSourceRef.current = null;
+        return;
+      }
+
       try {
         if (event.data === "[DONE]") return;
         const data = JSON.parse(event.data);
+        const status = String(data.status ?? "").toLowerCase();
 
         if (typeof data.processed === "number") setProcessed(data.processed);
         if (typeof data.progress === "number") setProgress(data.progress);
@@ -178,6 +185,7 @@ export function BulkRemediationBar({
           errorMsg = parsed.error || parsed.message || errorMsg;
         }
       } catch {}
+
       setMessage(errorMsg);
       setError({ message: errorMsg, selectionKey: requestedFor });
 
