@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Search, X, ChevronLeft, ChevronRight, History, Download } from "lucide-react";
+import { Search, X, ChevronLeft, ChevronRight, History, Download, ShieldCheck, Lock, ShieldAlert } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -338,43 +338,144 @@ export default function AuditLogTable({
             ) : (
               logs.map((log) => (
                 <React.Fragment key={log.id}>
-                  <TableRow className="border-b border-foreground/5 hover:bg-foreground/5 transition-colors">
-                    <TableCell className="py-4">
-                      <span className="font-bold text-sm">{log.action}</span>
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-medium">{displayUser(log)}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <span className="text-xs text-muted-foreground font-mono">
-                        {log.resource}
-                      </span>
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <Badge
-                        variant={
-                          log.decision === "BLOCK"
-                            ? "destructive"
-                            : log.decision === "PASS"
-                              ? "default"
-                              : "secondary"
-                        }
-                        className="text-[10px] tracking-widest px-1.5"
-                      >
-                        {log.decision || "INFO"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="py-4 text-right">
-                      <span className="text-[10px] text-muted-foreground font-mono">
-                        {new Intl.DateTimeFormat("en-US", {
-                          dateStyle: "medium",
-                          timeStyle: "short",
-                        }).format(new Date(log.timestamp))}
-                      </span>
-                    </TableCell>
-                  </TableRow>
+                  {(() => {
+                    const meta = (log.metadata as any) || {};
+                    const isArmorIQ = meta.isArmorIQ || log.action.startsWith("ARMORIQ_");
+                    return (
+                      <>
+                        <TableRow className="border-b border-foreground/5 hover:bg-foreground/5 transition-colors">
+                          <TableCell className="py-4">
+                            <div className="flex items-center gap-2">
+                              {isArmorIQ && (
+                                <span title="ArmorIQ Cryptographically Enforced Intent">
+                                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                                </span>
+                              )}
+                              <span className="font-bold text-sm">{log.action}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-4">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium">{displayUser(log)}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-4">
+                            <span className="text-xs text-muted-foreground font-mono">
+                              {log.resource}
+                            </span>
+                          </TableCell>
+                          <TableCell className="py-4">
+                            <Badge
+                              variant={
+                                log.decision === "BLOCK"
+                                  ? "destructive"
+                                  : log.decision === "PASS" || log.decision === "ALLOW"
+                                    ? "default"
+                                    : "secondary"
+                              }
+                              className="text-[10px] tracking-widest px-1.5"
+                            >
+                              {log.decision || "INFO"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="py-4 text-right">
+                            <span className="text-[10px] text-muted-foreground font-mono">
+                              {new Intl.DateTimeFormat("en-US", {
+                                dateStyle: "medium",
+                                timeStyle: "short",
+                              }).format(new Date(log.timestamp))}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+
+                        {isArmorIQ && (
+                          <TableRow className="border-b border-foreground/5 bg-emerald-950/[0.08]">
+                            <TableCell colSpan={5} className="py-3 px-4">
+                              <details className="group rounded-xl border border-emerald-800/40 bg-black/60 p-4 text-xs shadow-inner">
+                                <summary className="cursor-pointer font-mono font-bold text-emerald-400 hover:text-emerald-300 flex items-center justify-between select-none">
+                                  <span className="flex items-center gap-2 text-sm">
+                                    <Lock className="w-3.5 h-3.5 text-emerald-400" />
+                                    <span>🛡️ ArmorIQ Cryptographic Intent & Compliance Evidence</span>
+                                    <Badge variant="outline" className="text-[9px] text-emerald-400 border-emerald-800/60 font-mono">
+                                      Tamper-Evident
+                                    </Badge>
+                                  </span>
+                                  <span className="text-xs text-muted-foreground group-open:rotate-180 transition-transform">
+                                    ▼
+                                  </span>
+                                </summary>
+                                <div className="mt-3 space-y-3 font-mono text-[11px]">
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                                    <div className="p-2.5 rounded-lg bg-black/80 border border-emerald-900/30 space-y-1">
+                                      <span className="text-muted-foreground text-[10px] uppercase font-bold block">
+                                        Agent Identity & Intent
+                                      </span>
+                                      <p className="text-emerald-300">
+                                        <span className="text-muted-foreground">Agent: </span>
+                                        {meta.agentId || "Autonomous Agent"}
+                                      </p>
+                                      {meta.intentId && (
+                                        <p className="text-muted-foreground truncate" title={meta.intentId}>
+                                          <span>Intent ID: </span>
+                                          <span className="text-foreground">{meta.intentId}</span>
+                                        </p>
+                                      )}
+                                      {meta.rule && (
+                                        <p className="text-muted-foreground">
+                                          <span>Enforced Rule: </span>
+                                          <span className="text-amber-400">{meta.rule}</span>
+                                        </p>
+                                      )}
+                                    </div>
+
+                                    <div className="p-2.5 rounded-lg bg-black/80 border border-emerald-900/30 space-y-1">
+                                      <span className="text-muted-foreground text-[10px] uppercase font-bold block">
+                                        Cryptographic Provenance
+                                      </span>
+                                      <p className="text-muted-foreground truncate" title={meta.proofHash}>
+                                        <span>Proof Hash: </span>
+                                        <span className="text-emerald-400 font-mono">{meta.proofHash || "N/A"}</span>
+                                      </p>
+                                      <p className="text-muted-foreground truncate" title={meta.signature}>
+                                        <span>Signature: </span>
+                                        <span className="text-foreground font-mono">{meta.signature || "N/A"}</span>
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  {meta.reason && (
+                                    <div className="p-2.5 rounded-lg bg-foreground/[0.03] border border-foreground/10">
+                                      <span className="text-muted-foreground text-[10px] uppercase font-bold block mb-1">
+                                        Gatekeeper Policy Decision
+                                      </span>
+                                      <p className="text-foreground text-xs font-sans">{meta.reason}</p>
+                                    </div>
+                                  )}
+
+                                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                                    <span className="text-muted-foreground text-[10px] mr-1">Compliance Mapping:</span>
+                                    {((meta.complianceFrameworks as string[]) || [
+                                      "SOC 2 (CC6.1)",
+                                      "GDPR (Art. 32)",
+                                      "NIST SP 800-53 (AC-3, AU-2)",
+                                    ]).map((framework) => (
+                                      <Badge
+                                        key={framework}
+                                        variant="secondary"
+                                        className="text-[10px] bg-emerald-950/40 text-emerald-300 border-emerald-800/40"
+                                      >
+                                        {framework}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                              </details>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </>
+                    );
+                  })()}
 
                   {log.decision === "PASS" && (
                     <TableRow className="border-b border-foreground/5 bg-foreground/[0.02]">

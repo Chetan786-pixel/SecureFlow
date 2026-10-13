@@ -370,6 +370,7 @@ export function findSecretLogging(source: string): Violation[] {
       line,
       text: (lines[line - 1] ?? "").trim(),
       reason: indicator[0],
+      severity: "HIGH",
     });
   }
 

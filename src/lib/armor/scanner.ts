@@ -71,10 +71,7 @@ export const DEFAULT_SCAN_MODEL = "openai/gpt-oss-20b";
 /**
  * Fallback Groq models used when the primary model encounters rate limits (429) or timeouts (#1182).
  */
-export const SCAN_FALLBACK_MODELS = [
-  "openai/gpt-oss-120b",
-  "qwen/qwen3.6-27b",
-] as const;
+export const SCAN_FALLBACK_MODELS = ["openai/gpt-oss-120b", "qwen/qwen3.6-27b"] as const;
 
 /**
  * Groq model id for the PR scan.
@@ -730,207 +727,212 @@ CRITICAL RULES:
               { timeout: SCAN_REQUEST_TIMEOUT_MS, signal: controller.signal },
             );
 
-          const timeoutPromise = new Promise<never>((_, reject) => {
-            setTimeout(
-              () =>
-                reject(
-                  new ScannerTimeoutError(
-                    `LLM scan timed out after ${SCAN_REQUEST_TIMEOUT_MS / 1000} seconds`,
+            const timeoutPromise = new Promise<never>((_, reject) => {
+              setTimeout(
+                () =>
+                  reject(
+                    new ScannerTimeoutError(
+                      `LLM scan timed out after ${SCAN_REQUEST_TIMEOUT_MS / 1000} seconds`,
+                    ),
                   ),
-                ),
-              SCAN_REQUEST_TIMEOUT_MS,
-            );
-          });
+                SCAN_REQUEST_TIMEOUT_MS,
+              );
+            });
 
-          const chatCompletion = await Promise.race([
-            chatCompletionPromise.finally(() => clearTimeout(timeoutId)),
-            timeoutPromise,
-          ]);
+            const chatCompletion = await Promise.race([
+              chatCompletionPromise.finally(() => clearTimeout(timeoutId)),
+              timeoutPromise,
+            ]);
 
-          const responseText = chatCompletion.choices[0]?.message?.content || '{"findings": []}';
-          const withoutThoughts = responseText.replace(/<think>[\s\S]*?(<\/think>|$)/gi, "");
+            const responseText = chatCompletion.choices[0]?.message?.content || '{"findings": []}';
+            const withoutThoughts = responseText.replace(/<think>[\s\S]*?(<\/think>|$)/gi, "");
 
-          // Match either an array '[' or an object '{'
-          const jsonMatch = withoutThoughts.match(/[\{\[][\s\S]*[\}\]]/);
+            // Match either an array '[' or an object '{'
+            const jsonMatch = withoutThoughts.match(/[\{\[][\s\S]*[\}\]]/);
 
-          if (!jsonMatch) {
-            // Throw an error so the retry logic catches it, instead of silently returning 0 findings
-            throw new SyntaxError("LLM refused to scan or returned non-JSON text.");
-          }
+            if (!jsonMatch) {
+              // Throw an error so the retry logic catches it, instead of silently returning 0 findings
+              throw new SyntaxError("LLM refused to scan or returned non-JSON text.");
+            }
 
-          const cleanJsonString = jsonMatch[0];
+            const cleanJsonString = jsonMatch[0];
 
-          let result: Record<string, unknown> | unknown[];
-          try {
-            result = JSON.parse(cleanJsonString);
-          } catch (parseError) {
-            console.error(
-              "\n[🚨 LLM RETURNED INVALID JSON 🚨]\nRaw Output:\n" +
-                responseText +
-                "\n--------------------------\n",
-            );
-            throw parseError;
-          }
+            let result: Record<string, unknown> | unknown[];
+            try {
+              result = JSON.parse(cleanJsonString);
+            } catch (parseError) {
+              console.error(
+                "\n[🚨 LLM RETURNED INVALID JSON 🚨]\nRaw Output:\n" +
+                  responseText +
+                  "\n--------------------------\n",
+              );
+              throw parseError;
+            }
 
-          let rawFindings: unknown[] = [];
+            let rawFindings: unknown[] = [];
 
-          if (Array.isArray(result)) {
-            // If the LLM returned a raw array: [ {...} ]
-            rawFindings = result;
-          } else if (
-            result &&
-            typeof result === "object" &&
-            "findings" in result &&
-            Array.isArray((result as { findings: unknown[] }).findings)
-          ) {
-            // If the LLM perfectly followed instructions: { "findings": [...] }
-            rawFindings = (result as { findings: unknown[] }).findings;
-          } else if (result && typeof result === "object") {
-            // If the LLM hallucinated keys, loop through the entire object and combine ALL arrays
-            const obj = result as Record<string, unknown>;
-            for (const key of Object.keys(obj)) {
-              const val = obj[key];
-              if (Array.isArray(val)) {
-                rawFindings.push(...val);
+            if (Array.isArray(result)) {
+              // If the LLM returned a raw array: [ {...} ]
+              rawFindings = result;
+            } else if (
+              result &&
+              typeof result === "object" &&
+              "findings" in result &&
+              Array.isArray((result as { findings: unknown[] }).findings)
+            ) {
+              // If the LLM perfectly followed instructions: { "findings": [...] }
+              rawFindings = (result as { findings: unknown[] }).findings;
+            } else if (result && typeof result === "object") {
+              // If the LLM hallucinated keys, loop through the entire object and combine ALL arrays
+              const obj = result as Record<string, unknown>;
+              for (const key of Object.keys(obj)) {
+                const val = obj[key];
+                if (Array.isArray(val)) {
+                  rawFindings.push(...val);
+                }
               }
             }
-          }
 
-          const sanitizedFindings: ScanFinding[] = rawFindings.map((fItem: unknown) => {
-            const f = (fItem && typeof fItem === "object" ? fItem : {}) as Record<string, unknown>;
-            let normalizedSnippet = "";
+            const sanitizedFindings: ScanFinding[] = rawFindings.map((fItem: unknown) => {
+              const f = (fItem && typeof fItem === "object" ? fItem : {}) as Record<
+                string,
+                unknown
+              >;
+              let normalizedSnippet = "";
 
-            if (typeof f.codeSnippet === "string") {
-              normalizedSnippet = f.codeSnippet;
-            } else if (f.codeSnippet !== null && f.codeSnippet !== undefined) {
-              normalizedSnippet =
-                typeof f.codeSnippet === "object"
-                  ? JSON.stringify(f.codeSnippet, null, 2)
-                  : String(f.codeSnippet);
-            }
+              if (typeof f.codeSnippet === "string") {
+                normalizedSnippet = f.codeSnippet;
+              } else if (f.codeSnippet !== null && f.codeSnippet !== undefined) {
+                normalizedSnippet =
+                  typeof f.codeSnippet === "object"
+                    ? JSON.stringify(f.codeSnippet, null, 2)
+                    : String(f.codeSnippet);
+              }
 
-            const fileLoc = String(f.fileLocation || "Unknown file path");
-            // Normalised on write, the way severity already is. The column was
-            // taking the model's phrasing verbatim, so `"hardcoded_secret"` and
-            // `"Secrets"` were distinct values that no dashboard query matched
-            // (#590). The taxonomy still recognises every legacy spelling on
-            // read, so old rows keep counting.
-            const findingType = normalizeFindingTypeLabel(f.type);
+              const fileLoc = String(f.fileLocation || "Unknown file path");
+              // Normalised on write, the way severity already is. The column was
+              // taking the model's phrasing verbatim, so `"hardcoded_secret"` and
+              // `"Secrets"` were distinct values that no dashboard query matched
+              // (#590). The taxonomy still recognises every legacy spelling on
+              // read, so old rows keep counting.
+              const findingType = normalizeFindingTypeLabel(f.type);
 
-            const dynFp = computeDynamicFingerprint(
-              "default-repo",
-              fileLoc,
-              findingType,
-              normalizedSnippet,
-            );
+              const dynFp = computeDynamicFingerprint(
+                "default-repo",
+                fileLoc,
+                findingType,
+                normalizedSnippet,
+              );
 
-            return {
-              type: findingType,
-              // Shared normalization rather than a local valid-list: the model
-              // routinely answers with "moderate", "sev1" or "error" instead of
-              // one of the five canonical levels, and the local check discarded
-              // all of those down to MEDIUM.
-              severity: normalizeSeverity(f.severity),
-              description: String(f.description || "No description provided."),
-              fileLocation: fileLoc,
-              codeSnippet: normalizedSnippet,
-              lineStart: typeof f.lineStart === "number" ? f.lineStart : undefined,
-              lineEnd: typeof f.lineEnd === "number" ? f.lineEnd : undefined,
-              dynamicFingerprint: dynFp.fingerprint,
-              signatureVersion: dynFp.signatureVersion,
-              matchedSignatures: dynFp.matchedSignatures.map((s) => s.id),
-              isZeroDay: dynFp.isZeroDayDetected,
+              return {
+                type: findingType,
+                // Shared normalization rather than a local valid-list: the model
+                // routinely answers with "moderate", "sev1" or "error" instead of
+                // one of the five canonical levels, and the local check discarded
+                // all of those down to MEDIUM.
+                severity: normalizeSeverity(f.severity),
+                description: String(f.description || "No description provided."),
+                fileLocation: fileLoc,
+                codeSnippet: normalizedSnippet,
+                lineStart: typeof f.lineStart === "number" ? f.lineStart : undefined,
+                lineEnd: typeof f.lineEnd === "number" ? f.lineEnd : undefined,
+                dynamicFingerprint: dynFp.fingerprint,
+                signatureVersion: dynFp.signatureVersion,
+                matchedSignatures: dynFp.matchedSignatures.map((s) => s.id),
+                isZeroDay: dynFp.isZeroDayDetected,
+              };
+            });
+
+            findings = filterFalsePositives(sanitizedFindings, combinedPlaceholders).map((f) => ({
+              ...f,
+              // Through the full pass, which adds the `scrubCredentials` rules
+              // the logger and the error handler already apply, so the same
+              // vocabulary covers a credential wherever it surfaces.
+              description: maskFindingText(f.description),
+              codeSnippet: maskFindingText(f.codeSnippet),
+            }));
+            success = true;
+          } catch (error: unknown) {
+            lastError = error;
+            const errObj = error as {
+              name?: string;
+              status?: number;
+              headers?: Record<string, unknown> | { get?: (k: string) => string | null };
             };
-          });
 
-          findings = filterFalsePositives(sanitizedFindings, combinedPlaceholders).map((f) => ({
-            ...f,
-            // Through the full pass, which adds the `scrubCredentials` rules
-            // the logger and the error handler already apply, so the same
-            // vocabulary covers a credential wherever it surfaces.
-            description: maskFindingText(f.description),
-            codeSnippet: maskFindingText(f.codeSnippet),
-          }));
-          success = true;
-        } catch (error: unknown) {
-          lastError = error;
-          const errObj = error as {
-            name?: string;
-            status?: number;
-            headers?: Record<string, unknown> | { get?: (k: string) => string | null };
-          };
-
-          // 🛡️ JSON PARSE FALLBACK CATCH
-          if (error instanceof SyntaxError) {
-            console.warn(
-              `⚠️ Failed to parse extracted JSON. Retrying... (${retries} attempts left)`,
-            );
-            retries--;
-            continue;
-          }
-
-          if (error instanceof ScannerTimeoutError || errObj?.name === "AbortError") {
-            throw new ScannerTimeoutError(
-              `LLM scan timed out after ${SCAN_REQUEST_TIMEOUT_MS / 1000} seconds`,
-            );
-          }
-          if (errObj?.status === 429) {
-            const headers = errObj.headers;
-            let retryAfterHeader: string | undefined;
-            if (headers && typeof (headers as { get?: unknown }).get === "function") {
-              retryAfterHeader =
-                (headers as { get: (k: string) => string | null }).get("retry-after") ?? undefined;
-            } else if (headers && typeof headers === "object") {
-              retryAfterHeader = (headers as Record<string, string>)["retry-after"];
-            }
-            const requestedWait = retryAfterHeader
-              ? parseInt(retryAfterHeader, 10) * 1000
-              : (4 - retries) * 25000;
-            const remainingBudget = MAX_TOTAL_SCAN_MS - (Date.now() - scanStartedAt);
-            const waitTime = Math.max(
-              0,
-              Math.min(requestedWait, MAX_RETRY_WAIT_MS, remainingBudget),
-            );
-
-            if (waitTime <= 0) {
+            // 🛡️ JSON PARSE FALLBACK CATCH
+            if (error instanceof SyntaxError) {
               console.warn(
-                `⏱️ Scan deadline exceeded during rate-limit backoff — aborting retries for this batch.`,
+                `⚠️ Failed to parse extracted JSON. Retrying... (${retries} attempts left)`,
               );
-              break;
+              retries--;
+              continue;
             }
 
-            console.warn(`⏳ Rate limit reached. Waiting ${waitTime / 1000} seconds...`);
-            await delay(waitTime);
-            retries--;
-            if (retries === 0 && modelIdx < modelChain.length - 1) {
-              console.warn(
-                `🔄 Rate limit persisted on model [${currentModel}]. Switching to fallback model [${modelChain[modelIdx + 1]}]...`,
+            if (error instanceof ScannerTimeoutError || errObj?.name === "AbortError") {
+              throw new ScannerTimeoutError(
+                `LLM scan timed out after ${SCAN_REQUEST_TIMEOUT_MS / 1000} seconds`,
               );
-              break;
             }
-          } else if (
-            error instanceof Groq.APIConnectionTimeoutError ||
-            errObj?.name === "APIConnectionTimeoutError"
-          ) {
-            console.warn(
-              `⏱️ LLM request exceeded ${SCAN_REQUEST_TIMEOUT_MS / 1000}s timeout. Retrying... (${retries} attempts left)`,
-            );
-            retries--;
-            if (deadlineExceeded()) {
-              console.warn(
-                `⏱️ Scan deadline exceeded after a request timeout — aborting retries for this batch.`,
+            if (errObj?.status === 429) {
+              const headers = errObj.headers;
+              let retryAfterHeader: string | undefined;
+              if (headers && typeof (headers as { get?: unknown }).get === "function") {
+                retryAfterHeader =
+                  (headers as { get: (k: string) => string | null }).get("retry-after") ??
+                  undefined;
+              } else if (headers && typeof headers === "object") {
+                retryAfterHeader = (headers as Record<string, string>)["retry-after"];
+              }
+              const requestedWait = retryAfterHeader
+                ? parseInt(retryAfterHeader, 10) * 1000
+                : (4 - retries) * 25000;
+              const remainingBudget = MAX_TOTAL_SCAN_MS - (Date.now() - scanStartedAt);
+              const waitTime = Math.max(
+                0,
+                Math.min(requestedWait, MAX_RETRY_WAIT_MS, remainingBudget),
               );
-              break;
-            }
-            if (retries === 0 && modelIdx < modelChain.length - 1) {
+
+              if (waitTime <= 0) {
+                console.warn(
+                  `⏱️ Scan deadline exceeded during rate-limit backoff — aborting retries for this batch.`,
+                );
+                break;
+              }
+
+              console.warn(`⏳ Rate limit reached. Waiting ${waitTime / 1000} seconds...`);
+              await delay(waitTime);
+              retries--;
+              if (retries === 0 && modelIdx < modelChain.length - 1) {
+                console.warn(
+                  `🔄 Rate limit persisted on model [${currentModel}]. Switching to fallback model [${modelChain[modelIdx + 1]}]...`,
+                );
+                break;
+              }
+            } else if (
+              error instanceof Groq.APIConnectionTimeoutError ||
+              errObj?.name === "APIConnectionTimeoutError"
+            ) {
               console.warn(
-                `🔄 Request timeouts persisted on model [${currentModel}]. Switching to fallback model [${modelChain[modelIdx + 1]}]...`,
+                `⏱️ LLM request exceeded ${SCAN_REQUEST_TIMEOUT_MS / 1000}s timeout. Retrying... (${retries} attempts left)`,
               );
-              break;
+              retries--;
+              if (deadlineExceeded()) {
+                console.warn(
+                  `⏱️ Scan deadline exceeded after a request timeout — aborting retries for this batch.`,
+                );
+                break;
+              }
+              if (retries === 0 && modelIdx < modelChain.length - 1) {
+                console.warn(
+                  `🔄 Request timeouts persisted on model [${currentModel}]. Switching to fallback model [${modelChain[modelIdx + 1]}]...`,
+                );
+                break;
+              }
+            } else {
+              console.error(`❌ Consolidated scan failed completely:`, error);
+              throw error;
             }
-          } else {
-            console.error(`❌ Consolidated scan failed completely:`, error);
-            throw error;
           }
         }
 

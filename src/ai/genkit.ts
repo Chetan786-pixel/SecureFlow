@@ -166,3 +166,13 @@ export function getSecurityExplanationModelChain(): Array<typeof gptOssx20b | st
   }
   return [securityExplanationModel, ...securityExplanationFallbackModels];
 }
+
+// ── ArmorIQ Pre-Execution Intent Signing (#1275) ──────────────────────────
+export {
+  declareAndSignIntent as signAgentIntent,
+  declareAndSignIntent as emitExecutionPlan,
+  type ExecutionPlan,
+  type SignedIntent,
+} from "@/lib/armor/intent-signing";
+export { agentRegistry, ARMORIQ_AGENT_IDS } from "@/lib/armor/agent-registry";
+
