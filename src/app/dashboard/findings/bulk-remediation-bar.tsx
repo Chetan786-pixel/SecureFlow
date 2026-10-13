@@ -119,6 +119,7 @@ export function BulkRemediationBar({
       }
 
       try {
+        if (event.data === "[DONE]") return;
         const data = JSON.parse(event.data);
         const status = String(data.status ?? "").toLowerCase();
 
@@ -126,7 +127,20 @@ export function BulkRemediationBar({
         if (typeof data.progress === "number") setProgress(data.progress);
         if (data.message) setMessage(data.message);
 
-        if (status === "completed") {
+        const statusUpper = typeof data.status === "string" ? data.status.toUpperCase() : "";
+        const isCompleted =
+          statusUpper === "COMPLETED" ||
+          statusUpper === "GENERATED" ||
+          statusUpper === "DONE" ||
+          Boolean(data.success && (data.patch || data.patchDiff));
+
+        const isFailed =
+          statusUpper === "ERROR" ||
+          statusUpper === "FAILED" ||
+          data.success === false ||
+          Boolean(data.error);
+
+        if (isCompleted) {
           setStatus("completed");
           eventSource.close();
           eventSourceRef.current = null;
@@ -142,7 +156,7 @@ export function BulkRemediationBar({
             title: "Bulk Patch Generated 🛡️",
             description: `Generated combined patch for ${count} ${commonType} findings.`,
           });
-        } else if (status === "error" || status === "failed") {
+        } else if (isFailed) {
           setStatus("error");
           eventSource.close();
           eventSourceRef.current = null;
@@ -162,19 +176,16 @@ export function BulkRemediationBar({
       }
     };
 
-    eventSource.onerror = (event) => {
-      let serverError = "";
-      if ("data" in event && typeof event.data === "string") {
-        try {
-          const payload = JSON.parse(event.data);
-          serverError = payload.error || payload.message || "";
-        } catch {
-          // Native EventSource errors may not contain JSON data.
-        }
-      }
-
-      const errorMsg = serverError || "SSE connection lost or terminated.";
+    eventSource.onerror = (err: any) => {
       setStatus("error");
+      let errorMsg = "SSE connection lost or terminated.";
+      try {
+        if (err?.data) {
+          const parsed = typeof err.data === "string" ? JSON.parse(err.data) : err.data;
+          errorMsg = parsed.error || parsed.message || errorMsg;
+        }
+      } catch {}
+
       setMessage(errorMsg);
       setError({ message: errorMsg, selectionKey: requestedFor });
 
