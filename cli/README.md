@@ -69,16 +69,19 @@ npx secureflow --help
 ## 🚀 Quick Start
 
 1. **Stage your changes in git:**
+
    ```bash
    git add src/
    ```
 
 2. **Run the security scanner:**
+
    ```bash
    secureflow
    ```
 
 3. **Run with an audio summary debrief:**
+
    ```bash
    secureflow --voice
    ```
@@ -119,18 +122,18 @@ Commands:
 
 ### Options & Flags
 
-| Flag | Shorthand | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `--fail-on <level>` | | `medium` | Exit with error code `1` if findings meet or exceed severity (`low`, `medium`, `high`, `critical`) |
-| `--format <format>` | | `text` | Output report format: `text`, `json`, `sarif`, `csv`, `html`, `markdown` |
-| `--output <path>` | `-o` | `stdout` | Write report to the specified file path |
-| `--voice` | `-v` | `false` | Play an audio debrief of findings in your terminal upon completion |
-| `--local` | | `false` | Skip cloud AI upload and run fully local pattern analysis |
-| `--local-model <tag>` | | `llama3` | Specify local model tag when using local AI providers |
-| `--ignore-file <path>`| | `.secureflowignore` | Custom path to ignore configuration file |
-| `--dry-run` | | `false` | Simulate scan execution without writing output files |
-| `--verbose` | | `false` | Enable verbose diagnostic logging |
-| `--help` | `-h` | | Display CLI usage instructions and exit |
+| Flag                   | Shorthand | Default             | Description                                                                                        |
+| :--------------------- | :-------- | :------------------ | :------------------------------------------------------------------------------------------------- |
+| `--fail-on <level>`    |           | `medium`            | Exit with error code `1` if findings meet or exceed severity (`low`, `medium`, `high`, `critical`) |
+| `--format <format>`    |           | `text`              | Output report format: `text`, `json`, `sarif`, `csv`, `html`, `markdown`                           |
+| `--output <path>`      | `-o`      | `stdout`            | Write report to the specified file path                                                            |
+| `--voice`              | `-v`      | `false`             | Play an audio debrief of findings in your terminal upon completion                                 |
+| `--local`              |           | `false`             | Skip cloud AI upload and run fully local pattern analysis                                          |
+| `--local-model <tag>`  |           | `llama3`            | Specify local model tag when using local AI providers                                              |
+| `--ignore-file <path>` |           | `.secureflowignore` | Custom path to ignore configuration file                                                           |
+| `--dry-run`            |           | `false`             | Simulate scan execution without writing output files                                               |
+| `--verbose`            |           | `false`             | Enable verbose diagnostic logging                                                                  |
+| `--help`               | `-h`      |                     | Display CLI usage instructions and exit                                                            |
 
 ---
 
@@ -177,6 +180,7 @@ secureflow --local
 ```
 
 ### Guarantees under `--local`:
+
 - **Zero Cloud Uploads**: The hosted AI API pass (`/api/cli/scan`) is completely bypassed.
 - **Staged Code Stays Local**: File contents are parsed and scanned strictly in-memory on your local machine.
 - **Compatible with Local Models**: Seamlessly pairs with local Ollama or vLLM deployments (`--local-model <tag>`).
@@ -194,6 +198,7 @@ secureflow -v
 ```
 
 ### Capabilities:
+
 - **Native OS Playback**:
   - macOS: `afplay`
   - Windows: PowerShell `System.Media.SoundPlayer` / `Windows.Media.Playback`
@@ -229,12 +234,12 @@ Add this configuration to your `claude_desktop_config.json` or Cursor MCP settin
 
 ### Available MCP Tools
 
-| Tool | Parameters | Description |
-| :--- | :--- | :--- |
-| `query_threat_intelligence` | `query: string`, `intentToken?: string` | Search CVE and threat intelligence databases for vulnerabilities and remediation guidance. |
-| `lookup_cve` | `cveId: string`, `intentToken?: string` | Look up detailed advisories, severity scores, and fix patterns for a CVE or CWE identifier. |
+| Tool                        | Parameters                              | Description                                                                                 |
+| :-------------------------- | :-------------------------------------- | :------------------------------------------------------------------------------------------ |
+| `query_threat_intelligence` | `query: string`, `intentToken?: string` | Search CVE and threat intelligence databases for vulnerabilities and remediation guidance.  |
+| `lookup_cve`                | `cveId: string`, `intentToken?: string` | Look up detailed advisories, severity scores, and fix patterns for a CVE or CWE identifier. |
 
-*All MCP tool calls are gated behind ArmorIQ cryptographic intent verification to enforce zero-trust boundary compliance and mitigate Prompt Injection (CWE-94).*
+_All MCP tool calls are gated behind ArmorIQ cryptographic intent verification to enforce zero-trust boundary compliance and mitigate Prompt Injection (CWE-94)._
 
 ---
 
