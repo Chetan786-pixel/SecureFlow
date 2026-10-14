@@ -1,4 +1,26 @@
+/**
+ * Mock Groq SDK Module (Security Audit Cleaned - #1303)
+ *
+ * This mock contains purely synthetic data and ensures that no real API keys,
+ * production credentials, or internal infrastructure tokens are hardcoded or leaked.
+ */
 import { vi } from "vitest";
+
+/** Safe synthetic placeholder API key for test suites. */
+export const SAFE_MOCK_GROQ_API_KEY = "gsk_mock_test_token_never_expose";
+
+/**
+ * Asserts that a provided API key is purely a synthetic mock token
+ * and prevents accidental exposure of live production credentials in test suites.
+ */
+export function assertSafeMockCredentials(apiKey?: string): boolean {
+  if (!apiKey) return true;
+  // Disallow real/live looking production keys that lack mock/test designations
+  if (apiKey.startsWith("gsk_") && !apiKey.toLowerCase().includes("mock") && !apiKey.toLowerCase().includes("test")) {
+    throw new Error("[SECURITY AUDIT #1303] Potentially live or sensitive Groq API key detected in mock suite!");
+  }
+  return true;
+}
 
 export const mockCreate = vi.fn().mockResolvedValue({
   choices: [{ message: { content: JSON.stringify({ findings: [] }) } }],
@@ -160,8 +182,14 @@ class MockGroq {
   static mockCreate = mockCreate;
   static mockStream = mockStream;
   chat = { completions: { create: mockCreate } };
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  constructor(_opts?: unknown) {}
+  apiKey: string;
+
+  constructor(opts?: { apiKey?: string; [key: string]: unknown }) {
+    if (opts?.apiKey) {
+      assertSafeMockCredentials(opts.apiKey);
+    }
+    this.apiKey = SAFE_MOCK_GROQ_API_KEY;
+  }
 }
 
 export default MockGroq;
