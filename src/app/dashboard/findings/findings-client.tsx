@@ -20,6 +20,7 @@ import FindingTriageControls, { BulkTriageBar } from "./finding-triage-controls"
 import BulkRemediationBar from "./bulk-remediation-bar";
 import FindingsPagination from "./findings-pagination";
 import FindingsToolbar from "./findings-toolbar";
+import FindingAudioPlayer from "@/components/findings/finding-audio-player";
 import { SbomReportCard } from "@/components/findings/sbom-report-card"; // [NEW] Import SBOM Card
 import { TriageStatus } from "@/lib/actions/triage";
 import type { FindingFilterOptions, FindingRow, FindingsStats } from "@/lib/actions/findings";
@@ -309,6 +310,12 @@ export default function FindingsClient({
                       <AccordionContent className="pb-6 pt-2">
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 px-4">
                           <div className="space-y-6">
+                            <FindingAudioPlayer
+                              findingId={finding.id}
+                              findingType={finding.type}
+                              severity={finding.severity}
+                            />
+
                             {finding.promptInjectionSuspected && (
                               <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 text-xs text-yellow-200">
                                 ⚠️{" "}
