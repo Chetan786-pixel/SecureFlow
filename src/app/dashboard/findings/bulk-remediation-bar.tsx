@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, Wrench, X, Info } from "lucide-react";
 import { PatchDiffViewer } from "@/components/findings/patch-diff-viewer";
+import { FindingAudioPlayer } from "@/components/findings/finding-audio-player";
 import { useToast } from "@/hooks/use-toast";
 import type { FindingRow } from "@/lib/actions/findings";
 
@@ -257,6 +258,15 @@ export function BulkRemediationBar({
           Generate a unified remediation patch covering all {count} selected {commonType} findings
           across the repository.
         </p>
+      )}
+
+      {selectedFindings.length > 0 && (
+        <FindingAudioPlayer
+          findingId={selectedFindings[0].id}
+          findingType={selectedFindings[0].type}
+          severity={selectedFindings[0].severity}
+          className="border-white/10 bg-black/60"
+        />
       )}
 
       {errorMessage && (
