@@ -573,3 +573,31 @@ export function filterBySeverity(
     violations: file.violations.filter((v) => !v.severity || severities.has(v.severity)),
   }));
 }
+
+/**
+ * Generates natural language summary debrief text suitable for TTS voice readout.
+ */
+export function generateVoiceSummaryText(
+  violationCount: number,
+  aiFindings: { severity?: string; type?: string }[] = [],
+  passed: boolean = true,
+): string {
+  if (passed && violationCount === 0 && aiFindings.length === 0) {
+    return "SecureFlow scan passed cleanly. Zero secret exposures or security findings detected in staged files.";
+  }
+
+  const parts: string[] = [];
+  if (violationCount > 0) {
+    parts.push(`${violationCount} secret-logging violation${violationCount === 1 ? "" : "s"}`);
+  }
+  if (aiFindings.length > 0) {
+    parts.push(`${aiFindings.length} AI-detected finding${aiFindings.length === 1 ? "" : "s"}`);
+  }
+
+  const details = parts.join(" and ");
+  if (!passed) {
+    return `Security alert. SecureFlow blocked this commit. Found ${details}. Please review terminal output and remove exposed secrets.`;
+  }
+
+  return `SecureFlow advisory warning. Found ${details}. Scan passed below blocking threshold.`;
+}

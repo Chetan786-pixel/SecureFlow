@@ -22,7 +22,14 @@ import {
   scanFile,
   shouldFailScan,
   shouldScanFile,
+  generateVoiceSummaryText,
 } from "./scanner.js";
+import { parseVoiceArg } from "./lib/output-args.js";
+import {
+  isNonInteractiveCiEnvironment,
+  getOsAudioCommand,
+  playAudioFile,
+} from "./lib/audio-player.js";
 
 const source = (...lines: string[]) => lines.join("\n");
 
@@ -435,3 +442,57 @@ describe("secret-named identifiers", () => {
     expect(isSecretIdentifier("authorName")).toBe(false);
   });
 });
+
+describe("generateVoiceSummaryText", () => {
+  it("generates a clean pass message when zero findings exist", () => {
+    const text = generateVoiceSummaryText(0, [], true);
+    expect(text).toContain("Zero secret exposures");
+    expect(text).toContain("passed cleanly");
+  });
+
+  it("generates an alert message when scan fails with local violations", () => {
+    const text = generateVoiceSummaryText(2, [], false);
+    expect(text).toContain("Security alert");
+    expect(text).toContain("2 secret-logging violations");
+  });
+
+  it("generates an alert message with AI findings", () => {
+    const text = generateVoiceSummaryText(1, [{ severity: "HIGH" }], false);
+    expect(text).toContain("1 secret-logging violation and 1 AI-detected finding");
+  });
+
+  it("generates an advisory warning when scan passes with findings", () => {
+    const text = generateVoiceSummaryText(1, [{ severity: "LOW" }], true);
+    expect(text).toContain("advisory warning");
+    expect(text).toContain("Scan passed below blocking threshold");
+  });
+});
+
+describe("voice flag and audio player integration", () => {
+  it("parses --voice and -v flags", () => {
+    expect(parseVoiceArg(["node", "cli", "--voice"])).toBe(true);
+    expect(parseVoiceArg(["node", "cli", "-v"])).toBe(true);
+    expect(parseVoiceArg(["node", "cli", "--voice=true"])).toBe(true);
+    expect(parseVoiceArg(["node", "cli", "--voice=false"])).toBe(false);
+    expect(parseVoiceArg(["node", "cli"])).toBe(false);
+  });
+
+  it("detects CI environment to gracefully bypass audio playback", () => {
+    expect(isNonInteractiveCiEnvironment({ CI: "true" })).toBe(true);
+    expect(isNonInteractiveCiEnvironment({ GITHUB_ACTIONS: "true" })).toBe(true);
+    expect(isNonInteractiveCiEnvironment({ CI: "false", GITHUB_ACTIONS: undefined })).toBe(false);
+  });
+
+  it("resolves appropriate OS audio playback command per platform", () => {
+    expect(getOsAudioCommand("test.mp3", "darwin")?.command).toBe("afplay");
+    expect(getOsAudioCommand("test.mp3", "win32")?.command).toBe("powershell");
+    expect(getOsAudioCommand("test.mp3", "linux")?.command).toBe("mpg123");
+  });
+
+  it("bypasses audio playback in CI environment gracefully", () => {
+    const res = playAudioFile("test.mp3", { env: { CI: "true" } });
+    expect(res.played).toBe(false);
+    expect(res.bypassed).toBe(true);
+  });
+});
+
