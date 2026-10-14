@@ -56,13 +56,14 @@ const cliScanRequestSchema = z.object({
             `file content exceeds maximum size of ${MAX_FILE_CONTENT_LENGTH} characters`,
           ),
       }),
-      { message: '"files" must be a non-empty array' },
     )
-    .min(1, '"files" must be a non-empty array')
     .max(
       MAX_FILES_PER_REQUEST,
       `"files" array cannot contain more than ${MAX_FILES_PER_REQUEST} files per request`,
-    ),
+    )
+    .default([]),
+  voice: z.boolean().optional(),
+  summaryText: z.string().optional(),
 });
 
 /**
@@ -153,9 +154,41 @@ const handler = withErrorHandler(async function POST(req: NextRequest) {
   // to its default secret-detection rules (see scanner.ts's
   // policyInstructions branch) -- the same scope as the CLI's own local
   // scanFile() check, just AI-powered on top of it.
-  const findings = await scanner.scanPullRequest(fileChanges);
+  const findings = fileChanges.length > 0 ? await scanner.scanPullRequest(fileChanges) : [];
 
-  return NextResponse.json({ findings }, { headers: { "Cache-Control": "no-store" } });
+  let audioBase64: string | undefined;
+  if (parsed.data.voice && process.env.ELEVENLABS_API_KEY) {
+    try {
+      const summary =
+        parsed.data.summaryText ||
+        (findings.length > 0
+          ? `SecureFlow scan completed with ${findings.length} findings.`
+          : "SecureFlow scan passed cleanly.");
+      const voiceId = process.env.ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM";
+      const ttsRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "xi-api-key": process.env.ELEVENLABS_API_KEY,
+        },
+        body: JSON.stringify({
+          text: summary,
+          model_id: "eleven_monolingual_v1",
+        }),
+      });
+      if (ttsRes.ok) {
+        const buf = await ttsRes.arrayBuffer();
+        audioBase64 = Buffer.from(buf).toString("base64");
+      }
+    } catch {
+      // Graceful fallback
+    }
+  }
+
+  return NextResponse.json(
+    { findings, ...(audioBase64 ? { audioBase64 } : {}) },
+    { headers: { "Cache-Control": "no-store" } },
+  );
 });
 
 export const POST = withRateLimit(handler, {

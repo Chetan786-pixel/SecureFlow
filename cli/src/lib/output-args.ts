@@ -102,3 +102,15 @@ export function parseIgnoreFilePath(argv: readonly string[]): string | undefined
   if (raw === null) throw new CliUsageError("--ignore-file requires a file path");
   return raw;
 }
+
+/** `-v` / `--voice` flag: play an audio summary debrief. */
+export function parseVoiceArg(argv: readonly string[]): boolean {
+  for (const arg of argv) {
+    if (arg === "--voice" || arg === "-v") return true;
+    if (arg.startsWith("--voice=")) {
+      const val = arg.slice("--voice=".length).toLowerCase();
+      return val !== "false" && val !== "0";
+    }
+  }
+  return false;
+}
