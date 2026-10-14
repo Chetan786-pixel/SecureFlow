@@ -9,6 +9,7 @@ import {
   withRetry,
 } from "./security-helpers";
 import { getAiInstance, getDefaultModelRef, getSecurityExplanationModelChain } from "@/ai/genkit";
+import { recordAiFallbackEvent } from "@/lib/audit/ai-fallback-audit";
 import {
   InsufficientVRAMError,
   insufficientVramMessage,
@@ -134,10 +135,18 @@ export async function developerReceivesAISecurityExplanations(
           }
           throw modelErr;
         }
-        if (i < modelsToTry.length - 1 && (isRateLimitError(modelErr) || isTimeoutError(modelErr))) {
+        if (
+          i < modelsToTry.length - 1 &&
+          (isRateLimitError(modelErr) || isTimeoutError(modelErr))
+        ) {
           console.warn(
             `[AI_FALLBACK] Model ${getModelId(candidate)} rate-limited or timed out. Switching to fallback model: ${getModelId(modelsToTry[i + 1])}`,
           );
+          void recordAiFallbackEvent({
+            fromModel: getModelId(candidate),
+            toModel: getModelId(modelsToTry[i + 1]),
+            reason: isRateLimitError(modelErr) ? "rate_limit" : "timeout",
+          });
           continue;
         }
         throw modelErr;
