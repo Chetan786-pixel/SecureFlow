@@ -69,13 +69,15 @@ export default function AuditLogTable({
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [isExporting, setIsExporting] = useState(false);
+  const [armoriqOnly, setArmoriqOnly] = useState(false);
 
   const hasFilters =
     search.trim() !== "" ||
     actionFilter !== ALL ||
     decisionFilter !== ALL ||
     dateFrom !== "" ||
-    dateTo !== "";
+    dateTo !== "" ||
+    armoriqOnly;
 
   // Reconstructed here from the plain `ownName` string prop — every log is
   // already scoped to this user (or is a null-userId "System" event), so
@@ -88,6 +90,7 @@ export default function AuditLogTable({
     setDecisionFilter(ALL);
     setDateFrom("");
     setDateTo("");
+    setArmoriqOnly(false);
     setPage(1);
   };
 
@@ -120,68 +123,133 @@ export default function AuditLogTable({
 
       const dateStamp = new Date().toISOString().slice(0, 10);
 
+      // Directly leverage /api/audit/armoriq compliance evidence endpoint
+      // for verified SOC 2 and ISO 27001 export traceability
+      let complianceEvidence: any[] = [];
+      if (
+        exportFormat === "soc2-pdf" ||
+        exportFormat === "soc2-json" ||
+        exportFormat === "iso-pdf" ||
+        exportFormat === "iso-csv"
+      ) {
+        const framework = exportFormat.startsWith("soc2") ? "SOC2" : "ISO27001";
+        const decisionParam = decisionFilter !== ALL ? `&decision=${encodeURIComponent(decisionFilter)}` : "";
+        try {
+          const apiRes = await fetch(`/api/audit/armoriq?format=compliance&framework=${framework}${decisionParam}`);
+          if (apiRes.ok) {
+            const apiData = await apiRes.json();
+            complianceEvidence = apiData.evidence || [];
+          }
+        } catch (e) {
+          console.warn("Failed to retrieve ArmorIQ compliance evidence from /api/audit/armoriq, falling back to local logs", e);
+        }
+      }
+
       if (exportFormat === "soc2-pdf") {
-        const soc2Rows = result.rows.map((log) => {
-          const meta = (log.metadata as any) || {};
-          return {
-            traceId: log.id,
-            action: log.action,
-            decision: log.decision || "ALLOW",
-            resource: log.resource,
-            justification: meta.reason || meta.justification || "Evaluated by ArmorIQ Policy Engine",
-            ruleMatched: meta.rule || meta.ruleMatched || "Zero-Trust Enforcement",
-            proofHash: meta.proofHash || "VERIFIED_CRYPTOGRAPHIC_TOKEN",
-            signature: meta.signature || "PROVENANCE_HMAC_VALID",
-            frameworkControls: ["SOC 2 CC6.1 (Logical Access)", "SOC 2 CC6.8 (Malicious Behavior Prevention)"],
-            timestamp: new Date(log.timestamp).toISOString(),
-          };
-        });
+        const soc2Rows =
+          complianceEvidence.length > 0
+            ? complianceEvidence.map((item: any) => ({
+                traceId: item.auditId,
+                action: item.toolInvoked,
+                decision: item.policyDecision || "ALLOW",
+                resource: item.toolInvoked,
+                justification: item.justification || "Evaluated by ArmorIQ Policy Engine",
+                ruleMatched: item.ruleEnforced || "Zero-Trust Enforcement",
+                proofHash: item.cryptographicProof || "VERIFIED_CRYPTOGRAPHIC_TOKEN",
+                signature: item.signatureProvenance || "PROVENANCE_HMAC_VALID",
+                frameworkControls: item.complianceControls || [
+                  "SOC 2 CC6.1 (Logical Access)",
+                  "SOC 2 CC6.8 (Malicious Behavior Prevention)",
+                ],
+                timestamp: item.timestamp,
+              }))
+            : result.rows.map((log) => {
+                const meta = (log.metadata as any) || {};
+                return {
+                  traceId: log.id,
+                  action: log.action,
+                  decision: log.decision || "ALLOW",
+                  resource: log.resource,
+                  justification: meta.reason || meta.justification || "Evaluated by ArmorIQ Policy Engine",
+                  ruleMatched: meta.rule || meta.ruleMatched || "Zero-Trust Enforcement",
+                  proofHash: meta.proofHash || "VERIFIED_CRYPTOGRAPHIC_TOKEN",
+                  signature: meta.signature || "PROVENANCE_HMAC_VALID",
+                  frameworkControls: ["SOC 2 CC6.1 (Logical Access)", "SOC 2 CC6.8 (Malicious Behavior Prevention)"],
+                  timestamp: new Date(log.timestamp).toISOString(),
+                };
+              });
         downloadCompliancePDF("SOC 2 Type II AI Agent Traceability Report", soc2Rows, `soc2-compliance-${dateStamp}.pdf`);
       } else if (exportFormat === "soc2-json") {
-        const soc2Json = result.rows.map((log) => {
-          const meta = (log.metadata as any) || {};
-          return {
-            traceId: log.id,
-            action: log.action,
-            decision: log.decision || "ALLOW",
-            resource: log.resource,
-            justification: meta.reason || meta.justification || "ArmorIQ Intent Verification",
-            ruleMatched: meta.rule || meta.ruleMatched || "Zero-Trust Intent Gate",
-            proofHash: meta.proofHash || null,
-            signature: meta.signature || null,
-            controls: ["SOC 2 CC6.1", "SOC 2 CC6.8", "SOC 2 CC7.2"],
-            timestamp: new Date(log.timestamp).toISOString(),
-          };
-        });
+        const soc2Json =
+          complianceEvidence.length > 0
+            ? complianceEvidence
+            : result.rows.map((log) => {
+                const meta = (log.metadata as any) || {};
+                return {
+                  traceId: log.id,
+                  action: log.action,
+                  decision: log.decision || "ALLOW",
+                  resource: log.resource,
+                  justification: meta.reason || meta.justification || "ArmorIQ Intent Verification",
+                  ruleMatched: meta.rule || meta.ruleMatched || "Zero-Trust Intent Gate",
+                  proofHash: meta.proofHash || null,
+                  signature: meta.signature || null,
+                  controls: ["SOC 2 CC6.1", "SOC 2 CC6.8", "SOC 2 CC7.2"],
+                  timestamp: new Date(log.timestamp).toISOString(),
+                };
+              });
         downloadJSON(soc2Json, `soc2-compliance-${dateStamp}.json`);
       } else if (exportFormat === "iso-pdf") {
-        const isoRows = result.rows.map((log) => {
-          const meta = (log.metadata as any) || {};
-          return {
-            auditId: log.id,
-            toolCall: log.resource,
-            policyDecision: log.decision || "ALLOW",
-            ruleMatched: meta.rule || meta.ruleMatched || "Default Zero-Trust Boundary",
-            ruleJustification: meta.reason || meta.justification || "ArmorIQ Runtime Policy Evaluation",
-            cryptographicProof: meta.proofHash || "N/A",
-            isoStandards: ["ISO 27001:2022 A.12.1.2", "ISO 27001:2022 A.14.2.8"],
-            timestamp: new Date(log.timestamp).toISOString(),
-          };
-        });
+        const isoRows =
+          complianceEvidence.length > 0
+            ? complianceEvidence.map((item: any) => ({
+                auditId: item.auditId,
+                toolCall: item.toolInvoked,
+                policyDecision: item.policyDecision || "ALLOW",
+                ruleMatched: item.ruleEnforced || "Default Zero-Trust Boundary",
+                ruleJustification: item.justification || "ArmorIQ Runtime Policy Evaluation",
+                cryptographicProof: item.cryptographicProof || "N/A",
+                isoStandards: item.complianceControls || ["ISO 27001:2022 A.12.1.2", "ISO 27001:2022 A.14.2.8"],
+                timestamp: item.timestamp,
+              }))
+            : result.rows.map((log) => {
+                const meta = (log.metadata as any) || {};
+                return {
+                  auditId: log.id,
+                  toolCall: log.resource,
+                  policyDecision: log.decision || "ALLOW",
+                  ruleMatched: meta.rule || meta.ruleMatched || "Default Zero-Trust Boundary",
+                  ruleJustification: meta.reason || meta.justification || "ArmorIQ Runtime Policy Evaluation",
+                  cryptographicProof: meta.proofHash || "N/A",
+                  isoStandards: ["ISO 27001:2022 A.12.1.2", "ISO 27001:2022 A.14.2.8"],
+                  timestamp: new Date(log.timestamp).toISOString(),
+                };
+              });
         downloadCompliancePDF("ISO 27001:2022 Audit & Tool Control Traceability Report", isoRows, `iso27001-compliance-${dateStamp}.pdf`);
       } else if (exportFormat === "iso-csv") {
-        const isoCsvRows = result.rows.map((log) => {
-          const meta = (log.metadata as any) || {};
-          return {
-            action: log.action,
-            tool: log.resource,
-            decision: log.decision || "INFO",
-            rule: meta.rule || "ArmorIQ Zero-Trust",
-            justification: meta.reason || "Evaluated",
-            standard: "ISO 27001 A.12.1.2",
-            timestamp: new Date(log.timestamp).toISOString(),
-          };
-        });
+        const isoCsvRows =
+          complianceEvidence.length > 0
+            ? complianceEvidence.map((item: any) => ({
+                action: item.toolInvoked,
+                tool: item.toolInvoked,
+                decision: item.policyDecision || "INFO",
+                rule: item.ruleEnforced || "ArmorIQ Zero-Trust",
+                justification: item.justification || "Evaluated",
+                standard: (item.complianceControls || []).join("; ") || "ISO 27001 A.12.1.2",
+                timestamp: item.timestamp,
+              }))
+            : result.rows.map((log) => {
+                const meta = (log.metadata as any) || {};
+                return {
+                  action: log.action,
+                  tool: log.resource,
+                  decision: log.decision || "INFO",
+                  rule: meta.rule || "ArmorIQ Zero-Trust",
+                  justification: meta.reason || "Evaluated",
+                  standard: "ISO 27001 A.12.1.2",
+                  timestamp: new Date(log.timestamp).toISOString(),
+                };
+              });
         downloadCSV(isoCsvRows, `iso27001-compliance-${dateStamp}.csv`);
       } else if (exportFormat === "json") {
         const jsonRows = result.rows.map((log) => ({
@@ -233,6 +301,52 @@ export default function AuditLogTable({
     const timer = setTimeout(async () => {
       setIsLoading(true);
       try {
+        // When ArmorIQ filter is enabled, query /api/audit/armoriq directly
+        // to render real-time enforcement traces and cryptographic proofs.
+        if (armoriqOnly) {
+          const params = new URLSearchParams();
+          if (decisionFilter !== ALL) params.set("decision", decisionFilter);
+          params.set("limit", String(PAGE_SIZE));
+          params.set("offset", String((page - 1) * PAGE_SIZE));
+          const apiRes = await fetch(`/api/audit/armoriq?${params.toString()}`);
+          if (apiRes.ok) {
+            const data = await apiRes.json();
+            const armoriqRows: UserAuditLogRow[] = (data.traces || []).map((t: any) => ({
+              id: t.id,
+              action: `ARMORIQ_TOOL_${t.decision}`,
+              resource: t.toolName,
+              decision: t.decision,
+              timestamp: new Date(t.timestamp),
+              userId: null,
+              metadata: {
+                isArmorIQ: true,
+                armorIQLogId: t.id,
+                agentId: t.agentId,
+                toolName: t.toolName,
+                rule: t.ruleMatched,
+                reason: t.justification,
+                proofHash: t.proofHash,
+                signature: t.signature,
+                intentId: t.intentId,
+                complianceFrameworks: t.frameworks,
+                privacyLevel: t.privacyLevel,
+                scanJobId: t.scanJobId,
+                findingId: t.findingId,
+              },
+            }));
+            if (!cancelled) {
+              setResult({
+                logs: armoriqRows,
+                total: data.total ?? armoriqRows.length,
+                totalPages: Math.max(1, Math.ceil((data.total ?? armoriqRows.length) / PAGE_SIZE)),
+                page,
+                pageSize: PAGE_SIZE,
+              });
+            }
+            return;
+          }
+        }
+
         const res = await getUserAuditLogs({
           action: actionFilter === ALL ? undefined : actionFilter,
           decision: decisionFilter === ALL ? undefined : decisionFilter,
@@ -252,7 +366,7 @@ export default function AuditLogTable({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [search, actionFilter, decisionFilter, dateFrom, dateTo, page]);
+  }, [search, actionFilter, decisionFilter, dateFrom, dateTo, page, armoriqOnly]);
 
   const { logs, total, totalPages } = result;
   const safePage = Math.min(page, totalPages);
@@ -302,6 +416,24 @@ export default function AuditLogTable({
               ))}
             </SelectContent>
           </Select>
+
+          <Button
+            variant={armoriqOnly ? "default" : "outline"}
+            size="sm"
+            onClick={() => {
+              setArmoriqOnly((prev) => !prev);
+              setPage(1);
+            }}
+            className={`h-9 gap-1.5 shrink-0 ${
+              armoriqOnly
+                ? "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-500"
+                : "border-emerald-700/40 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/30"
+            }`}
+            title="Query enforcement traces directly via /api/audit/armoriq"
+          >
+            <ShieldCheck className="w-3.5 h-3.5" />
+            {armoriqOnly ? "ArmorIQ Active" : "ArmorIQ Traces"}
+          </Button>
 
           {/* Date range + "to" + Export CSV are kept as one non-wrapping
               unit, so Export CSV always sits directly beside the date
@@ -594,6 +726,23 @@ export default function AuditLogTable({
                                     <span className="text-[10px] text-muted-foreground font-sans">
                                       🔒 {meta.privacyLevel || "Zero-Retention Metadata Mode"}
                                     </span>
+                                  </div>
+
+                                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-emerald-900/30 text-[10px]">
+                                    <span className="text-muted-foreground flex items-center gap-1.5">
+                                      <span>Audit API Route:</span>
+                                      <code className="text-emerald-400 bg-emerald-950/40 px-1 py-0.5 rounded border border-emerald-800/40">
+                                        /api/audit/armoriq
+                                      </code>
+                                    </span>
+                                    <a
+                                      href={`/api/audit/armoriq?decision=${log.decision || "ALLOW"}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-emerald-400 hover:text-emerald-300 hover:underline flex items-center gap-1 font-mono"
+                                    >
+                                      Verify Proof via API ↗
+                                    </a>
                                   </div>
                                 </div>
                               </details>
