@@ -57,11 +57,11 @@ const cliScanRequestSchema = z.object({
           ),
       }),
     )
+    .min(1, `"files" array cannot be empty`)
     .max(
       MAX_FILES_PER_REQUEST,
       `"files" array cannot contain more than ${MAX_FILES_PER_REQUEST} files per request`,
-    )
-    .default([]),
+    ),
   voice: z.boolean().optional(),
   summaryText: z.string().optional(),
 });

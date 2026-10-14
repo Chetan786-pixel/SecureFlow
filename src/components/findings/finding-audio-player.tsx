@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Play, Pause, RotateCcw, Volume2, Sparkles, Loader2, FastForward } from "lucide-react";
+import { Play, Pause, Volume2, Sparkles, Loader2, FastForward } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -21,9 +21,7 @@ const PLAYBACK_SPEEDS = [1, 1.25, 1.5] as const;
 type PlaybackSpeed = (typeof PLAYBACK_SPEEDS)[number];
 
 // Fixed height patterns for the mini waveform visualizer
-const WAVEFORM_HEIGHTS = [
-  35, 60, 45, 90, 70, 50, 85, 100, 75, 40, 80, 65, 90, 45, 60, 30,
-];
+const WAVEFORM_HEIGHTS = [35, 60, 45, 90, 70, 50, 85, 100, 75, 40, 80, 65, 90, 45, 60, 30];
 
 export function FindingAudioPlayer({
   findingId,
@@ -39,7 +37,6 @@ export function FindingAudioPlayer({
   const [duration, setDuration] = useState(0);
   const [playbackSpeed, setPlaybackSpeed] = useState<PlaybackSpeed>(1);
   const [autoFetchEnabled, setAutoFetchEnabled] = useState(initialAutoFetch);
-  const [isCached, setIsCached] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -289,6 +286,9 @@ export function FindingAudioPlayer({
                   {WAVEFORM_HEIGHTS.map((height, i) => {
                     const barPos = (i / WAVEFORM_HEIGHTS.length) * 100;
                     const isPassed = barPos <= progressPercent;
+                    // Deterministic wave modulation based on currentTime & bar index (pure during render)
+                    const waveFactor = 0.6 + ((Math.sin(currentTime * 8 + i * 1.5) + 1) / 2) * 0.4;
+                    const activeHeight = Math.max(25, Math.round(height * waveFactor));
 
                     return (
                       <div
@@ -297,15 +297,10 @@ export function FindingAudioPlayer({
                           "w-1 rounded-full transition-all duration-150",
                           isPassed ? "bg-primary" : "bg-white/15",
                           isPlaying && !isBuffering && "group-hover:opacity-90",
-                          isPlaying &&
-                            !isBuffering &&
-                            i % 2 === 0 &&
-                            "animate-pulse duration-700",
+                          isPlaying && !isBuffering && i % 2 === 0 && "animate-pulse duration-700",
                         )}
                         style={{
-                          height: isPlaying && !isBuffering
-                            ? `${Math.max(25, (height * (0.6 + Math.random() * 0.4)))}%`
-                            : `${height}%`,
+                          height: isPlaying && !isBuffering ? `${activeHeight}%` : `${height}%`,
                         }}
                       />
                     );

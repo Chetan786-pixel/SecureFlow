@@ -51,8 +51,13 @@ export function getOsAudioCommand(
         } catch {
           [System.Media.SystemSounds]::Beep.Play();
         }
-      `.replace(/\s+/g, " ").trim();
-      return { command: "powershell", args: ["-NoProfile", "-NonInteractive", "-Command", psScript] };
+      `
+        .replace(/\s+/g, " ")
+        .trim();
+      return {
+        command: "powershell",
+        args: ["-NoProfile", "-NonInteractive", "-Command", psScript],
+      };
     }
     case "linux":
       // Supports mpg123, aplay, paplay
@@ -214,7 +219,10 @@ export async function playVoiceDebrief(
   const audioBuffer = await fetchAudioSummary(summaryText, options);
   if (!audioBuffer || audioBuffer.length === 0) {
     const tempPath = path.join(os.tmpdir(), `secureflow-summary-${Date.now()}.mp3`);
-    fs.writeFileSync(tempPath, Buffer.from("ID3\x04\x00\x00\x00\x00\x00#TSSE\x00\x00\x00\x0f\x00\x00\x03Lavf58.29.100\x00"));
+    fs.writeFileSync(
+      tempPath,
+      Buffer.from("ID3\x04\x00\x00\x00\x00\x00#TSSE\x00\x00\x00\x0f\x00\x00\x03Lavf58.29.100\x00"),
+    );
     return playAudioFile(tempPath, options);
   }
 
