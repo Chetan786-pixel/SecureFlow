@@ -107,4 +107,3 @@ export function downloadCompliancePDF(
     URL.revokeObjectURL(url);
   }
 }
-

@@ -133,15 +133,21 @@ export default function AuditLogTable({
         exportFormat === "iso-csv"
       ) {
         const framework = exportFormat.startsWith("soc2") ? "SOC2" : "ISO27001";
-        const decisionParam = decisionFilter !== ALL ? `&decision=${encodeURIComponent(decisionFilter)}` : "";
+        const decisionParam =
+          decisionFilter !== ALL ? `&decision=${encodeURIComponent(decisionFilter)}` : "";
         try {
-          const apiRes = await fetch(`/api/audit/armoriq?format=compliance&framework=${framework}${decisionParam}`);
+          const apiRes = await fetch(
+            `/api/audit/armoriq?format=compliance&framework=${framework}${decisionParam}`,
+          );
           if (apiRes.ok) {
             const apiData = await apiRes.json();
             complianceEvidence = apiData.evidence || [];
           }
         } catch (e) {
-          console.warn("Failed to retrieve ArmorIQ compliance evidence from /api/audit/armoriq, falling back to local logs", e);
+          console.warn(
+            "Failed to retrieve ArmorIQ compliance evidence from /api/audit/armoriq, falling back to local logs",
+            e,
+          );
         }
       }
 
@@ -170,15 +176,23 @@ export default function AuditLogTable({
                   action: log.action,
                   decision: log.decision || "ALLOW",
                   resource: log.resource,
-                  justification: meta.reason || meta.justification || "Evaluated by ArmorIQ Policy Engine",
+                  justification:
+                    meta.reason || meta.justification || "Evaluated by ArmorIQ Policy Engine",
                   ruleMatched: meta.rule || meta.ruleMatched || "Zero-Trust Enforcement",
                   proofHash: meta.proofHash || "VERIFIED_CRYPTOGRAPHIC_TOKEN",
                   signature: meta.signature || "PROVENANCE_HMAC_VALID",
-                  frameworkControls: ["SOC 2 CC6.1 (Logical Access)", "SOC 2 CC6.8 (Malicious Behavior Prevention)"],
+                  frameworkControls: [
+                    "SOC 2 CC6.1 (Logical Access)",
+                    "SOC 2 CC6.8 (Malicious Behavior Prevention)",
+                  ],
                   timestamp: new Date(log.timestamp).toISOString(),
                 };
               });
-        downloadCompliancePDF("SOC 2 Type II AI Agent Traceability Report", soc2Rows, `soc2-compliance-${dateStamp}.pdf`);
+        downloadCompliancePDF(
+          "SOC 2 Type II AI Agent Traceability Report",
+          soc2Rows,
+          `soc2-compliance-${dateStamp}.pdf`,
+        );
       } else if (exportFormat === "soc2-json") {
         const soc2Json =
           complianceEvidence.length > 0
@@ -209,7 +223,10 @@ export default function AuditLogTable({
                 ruleMatched: item.ruleEnforced || "Default Zero-Trust Boundary",
                 ruleJustification: item.justification || "ArmorIQ Runtime Policy Evaluation",
                 cryptographicProof: item.cryptographicProof || "N/A",
-                isoStandards: item.complianceControls || ["ISO 27001:2022 A.12.1.2", "ISO 27001:2022 A.14.2.8"],
+                isoStandards: item.complianceControls || [
+                  "ISO 27001:2022 A.12.1.2",
+                  "ISO 27001:2022 A.14.2.8",
+                ],
                 timestamp: item.timestamp,
               }))
             : result.rows.map((log) => {
@@ -219,13 +236,18 @@ export default function AuditLogTable({
                   toolCall: log.resource,
                   policyDecision: log.decision || "ALLOW",
                   ruleMatched: meta.rule || meta.ruleMatched || "Default Zero-Trust Boundary",
-                  ruleJustification: meta.reason || meta.justification || "ArmorIQ Runtime Policy Evaluation",
+                  ruleJustification:
+                    meta.reason || meta.justification || "ArmorIQ Runtime Policy Evaluation",
                   cryptographicProof: meta.proofHash || "N/A",
                   isoStandards: ["ISO 27001:2022 A.12.1.2", "ISO 27001:2022 A.14.2.8"],
                   timestamp: new Date(log.timestamp).toISOString(),
                 };
               });
-        downloadCompliancePDF("ISO 27001:2022 Audit & Tool Control Traceability Report", isoRows, `iso27001-compliance-${dateStamp}.pdf`);
+        downloadCompliancePDF(
+          "ISO 27001:2022 Audit & Tool Control Traceability Report",
+          isoRows,
+          `iso27001-compliance-${dateStamp}.pdf`,
+        );
       } else if (exportFormat === "iso-csv") {
         const isoCsvRows =
           complianceEvidence.length > 0
