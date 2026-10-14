@@ -433,7 +433,9 @@ describe("ALL_INJECTION_PAYLOADS — full corpus parametrized sweep (#1109)", ()
 describe("ArmorIQ Fail-Closed Policy Enforcement (#1236)", () => {
   it("simulates an ArmorIQ API 503 Service Unavailable response, ensuring the flow returns a block directive", async () => {
     const mock503Client = {
-      verifyToken: vi.fn().mockRejectedValue(new Error("503 Service Unavailable: ArmorIQ service offline")),
+      verifyToken: vi
+        .fn()
+        .mockRejectedValue(new Error("503 Service Unavailable: ArmorIQ service offline")),
     };
 
     const token = {
@@ -450,7 +452,9 @@ describe("ArmorIQ Fail-Closed Policy Enforcement (#1236)", () => {
 
   it("simulates a network timeout to the ArmorIQ API, triggering a hard block on the pending tool call", async () => {
     const mockTimeoutClient = {
-      verifyToken: vi.fn().mockRejectedValue(new Error("ETIMEDOUT: Connection to ArmorIQ API timed out")),
+      verifyToken: vi
+        .fn()
+        .mockRejectedValue(new Error("ETIMEDOUT: Connection to ArmorIQ API timed out")),
     };
 
     const token = { tokenId: "token-timeout-test" };
@@ -484,7 +488,9 @@ describe("ArmorIQ Fail-Closed Policy Enforcement (#1236)", () => {
       verifyToken: vi.fn().mockResolvedValue(false),
     };
     const tamperedTokenObj = { tokenId: "token-tampered-proof" };
-    const tamperedObjResult = await verifyArmorIQStep(tamperedTokenObj, { client: mockTamperedClient });
+    const tamperedObjResult = await verifyArmorIQStep(tamperedTokenObj, {
+      client: mockTamperedClient,
+    });
     expect(tamperedObjResult.allowed).toBe(false);
     expect(tamperedObjResult.reason).toBe("verification_failed_unreachable");
   });

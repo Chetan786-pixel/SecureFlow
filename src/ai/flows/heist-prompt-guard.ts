@@ -370,10 +370,11 @@ export async function evaluatePromptSafety(
   // with single separators is still matched. The original payload is kept too —
   // the structural checks below care about the real layout.
   const deobfuscated = deobfuscateSpacing(payload);
-  const leetNormalized = payload.replace(/[01345@$]/g, (character) =>
-    ({ "0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "@": "a", $: "s" })[
-      character
-    ] ?? character,
+  const leetNormalized = payload.replace(
+    /[01345@$]/g,
+    (character) =>
+      ({ "0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "@": "a", $: "s" })[character] ??
+      character,
   );
   const compactPayload = payload.toLowerCase().replace(/[^a-z0-9]/g, "");
 
@@ -576,7 +577,11 @@ export async function verifyArmorIQStep(
       token = tokenOrInput.intentToken ?? tokenOrInput.token;
       options = { ...tokenOrInput, ...toolCallOrOptions };
     } else if (toolCallOrOptions && typeof toolCallOrOptions === "object") {
-      if ("action" in toolCallOrOptions || "mcp" in toolCallOrOptions || "tool" in toolCallOrOptions) {
+      if (
+        "action" in toolCallOrOptions ||
+        "mcp" in toolCallOrOptions ||
+        "tool" in toolCallOrOptions
+      ) {
         options = { toolCall: toolCallOrOptions, ...maybeOptions };
       } else {
         options = { ...toolCallOrOptions };
@@ -701,14 +706,13 @@ export async function verifyArmorIQStep(
     if (options.toolCall?.action) {
       const evaluation = ArmorIQService.evaluateActionPolicy(
         options.toolCall.action,
-        options.toolCall.params || {}
+        options.toolCall.params || {},
       );
 
       if (evaluation.status === "hold") {
-        logger.info(
-          `[ARMORIQ_POLICY] Action held for approval: ${options.toolCall.action}`,
-          { reason: evaluation.reason }
-        );
+        logger.info(`[ARMORIQ_POLICY] Action held for approval: ${options.toolCall.action}`, {
+          reason: evaluation.reason,
+        });
         return {
           allowed: false,
           status: "hold",
@@ -779,7 +783,8 @@ export async function armorIQRuntimeGatekeeper(params: {
 }): Promise<ArmorIQVerificationResult & { proofHash?: string; signature?: string; rule?: string }> {
   const { agentId, signedIntent, toolCall, userId } = params;
   const action = toolCall.action;
-  const targetPath = toolCall.targetPath || String(toolCall.params?.path || toolCall.params?.filePath || "");
+  const targetPath =
+    toolCall.targetPath || String(toolCall.params?.path || toolCall.params?.filePath || "");
 
   // 1. If signed intent is provided, verify cryptographic authenticity
   if (signedIntent) {
@@ -933,4 +938,3 @@ export const enforceRuntimeIntent = armorIQRuntimeGatekeeper;
 export const verifyArmorIQToken = verifyArmorIQStep;
 export const verifyArmorIQIntentToken = verifyArmorIQStep;
 export const verifyArmorIQPolicy = verifyArmorIQStep;
-

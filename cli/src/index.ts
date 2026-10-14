@@ -205,7 +205,9 @@ async function main(): Promise<number> {
       await startMcpServer();
       return 0;
     } catch (err) {
-      console.error(`❌ [SecureFlow MCP] Failed to start MCP server: ${err instanceof Error ? err.message : String(err)}`);
+      console.error(
+        `❌ [SecureFlow MCP] Failed to start MCP server: ${err instanceof Error ? err.message : String(err)}`,
+      );
       return 1;
     }
   }

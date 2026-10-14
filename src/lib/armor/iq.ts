@@ -136,13 +136,21 @@ export class ArmorIQService {
         compiledPolicy.deny.push(...conditions);
       } else if (action === "PASS" || action === "ALLOW") {
         compiledPolicy.allow.push(...conditions);
-      } else if (action === "HOLD" || action === "REVIEW REQUIRED" || action === "HOLD FOR APPROVAL") {
+      } else if (
+        action === "HOLD" ||
+        action === "REVIEW REQUIRED" ||
+        action === "HOLD FOR APPROVAL"
+      ) {
         compiledPolicy.hold.push(...conditions);
       }
     }
 
     // Default deny if no explicit allows are set, to adhere to zero-trust
-    if (compiledPolicy.allow.length === 0 && compiledPolicy.deny.length === 0 && compiledPolicy.hold.length === 0) {
+    if (
+      compiledPolicy.allow.length === 0 &&
+      compiledPolicy.deny.length === 0 &&
+      compiledPolicy.hold.length === 0
+    ) {
       compiledPolicy.deny.push("*:*");
     }
 
@@ -153,7 +161,7 @@ export class ArmorIQService {
    * Complete token verification and cryptographic validation via ArmorIQ SDK client.
    */
   static async verifyIntentToken(
-    token: string | IntentToken
+    token: string | IntentToken,
   ): Promise<{ valid: boolean; reason?: string; payload?: any }> {
     const client = this.getClient();
     if (!client) {
@@ -185,7 +193,7 @@ export class ArmorIQService {
    */
   static checkActionPermission(
     action: string,
-    compiledPolicy: Record<string, any>
+    compiledPolicy: Record<string, any>,
   ): { allowed: boolean; status: "ALLOW" | "DENY" | "HOLD"; reason: string } {
     const allowList = compiledPolicy.allow || [];
     const denyList = compiledPolicy.deny || [];
@@ -231,14 +239,14 @@ export class ArmorIQService {
       reason: `Action '${action}' rejected by default zero-trust policy`,
     };
   }
-  
+
   /**
    * Evaluates an agent action against compiled ArmorIQ policy.
    * Routine actions (e.g., formatting) are allowed; high-risk actions (modifying lockfiles, deployments) are held.
    */
   static evaluateActionPolicy(
     actionName: string,
-    params: Record<string, any> = {}
+    params: Record<string, any> = {},
   ): { status: "allow" | "deny" | "hold"; reason: string; requiresHumanApproval: boolean } {
     const actionLower = actionName.toLowerCase();
     const targetFile = String(params.filePath || params.file || "").toLowerCase();
@@ -265,7 +273,8 @@ export class ArmorIQService {
     if (isLockfileModification) {
       return {
         status: "hold",
-        reason: "Modifying dependency lockfiles requires human maintainer review and approval to prevent supply chain poisoning.",
+        reason:
+          "Modifying dependency lockfiles requires human maintainer review and approval to prevent supply chain poisoning.",
         requiresHumanApproval: true,
       };
     }
@@ -273,7 +282,8 @@ export class ArmorIQService {
     if (isDirectDeployment) {
       return {
         status: "hold",
-        reason: "Direct deployment actions are high-risk CI/CD operations requiring maintainer approval.",
+        reason:
+          "Direct deployment actions are high-risk CI/CD operations requiring maintainer approval.",
         requiresHumanApproval: true,
       };
     }

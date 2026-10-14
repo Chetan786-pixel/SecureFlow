@@ -121,7 +121,9 @@ export default function StatusClient({ status, timestamp, uptime, components }: 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium uppercase tracking-widest text-primary">System</span>
+            <span className="text-sm font-medium uppercase tracking-widest text-primary">
+              System
+            </span>
             {isLive ? (
               <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-green-500/10 text-green-400 border border-green-500/20">
                 <Radio className="w-3 h-3 animate-pulse" /> LIVE SSE

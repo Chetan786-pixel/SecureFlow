@@ -84,7 +84,8 @@ export const apiErrorMetrics: ApiErrorMetrics = {
 
 export function recordApiErrorMetric(statusCode: number, errorCode: string): void {
   apiErrorMetrics.totalErrors++;
-  apiErrorMetrics.errorsByStatus[statusCode] = (apiErrorMetrics.errorsByStatus[statusCode] || 0) + 1;
+  apiErrorMetrics.errorsByStatus[statusCode] =
+    (apiErrorMetrics.errorsByStatus[statusCode] || 0) + 1;
   apiErrorMetrics.errorsByCode[errorCode] = (apiErrorMetrics.errorsByCode[errorCode] || 0) + 1;
   apiErrorMetrics.lastErrorTimestamp = Date.now();
 }
@@ -125,18 +126,21 @@ export function withErrorHandler<Args extends unknown[], Result>(
       // including a Prisma `meta` holding query parameter values and any
       // request/response objects an HTTP client attached — which is how raw
       // credentials end up in log aggregation.
-      logger.error(`API route error caught by global handler${options?.routeLabel ? ` [${options.routeLabel}]` : ""}`, {
-        error: {
-          name: err?.name || "Error",
-          message: originalMessage,
-          stack,
-          code: prismaCode,
-          meta: prismaMeta,
+      logger.error(
+        `API route error caught by global handler${options?.routeLabel ? ` [${options.routeLabel}]` : ""}`,
+        {
+          error: {
+            name: err?.name || "Error",
+            message: originalMessage,
+            stack,
+            code: prismaCode,
+            meta: prismaMeta,
+          },
+          route: options?.routeLabel,
+          statusCode,
+          rawStatus: err?.statusCode ?? err?.status ?? null,
         },
-        route: options?.routeLabel,
-        statusCode,
-        rawStatus: err?.statusCode ?? err?.status ?? null,
-      });
+      );
 
       // 3. Construct strict, standardized client error response
       let clientErrorCode = STATUS_TO_ERROR_CODE[statusCode] || "INTERNAL_SERVER_ERROR";

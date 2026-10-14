@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+
 - Root-level centralized `CHANGELOG.md` to track full application releases, API route updates, database migrations, and Helm charts independently from `cli/CHANGELOG.md` ([#1268](https://github.com/GauravKarakoti/SecureFlow/issues/1268)).
 - Threat Intelligence MCP server integration providing real-time CVE and vulnerability context to the remediation engine ([#1200](https://github.com/GauravKarakoti/SecureFlow/issues/1200)).
 - "Hold for Approval" human-in-the-loop workflow for high-risk CI/CD policy actions and deployments ([#1199](https://github.com/GauravKarakoti/SecureFlow/issues/1199)).
@@ -20,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Real-time Server-Sent Events (SSE) streaming support for the system status dashboard route (`/api/health?stream=true`) ([#994](https://github.com/GauravKarakoti/SecureFlow/issues/994)).
 
 ### Fixed
+
 - Enforce authoritative pull request diff validation on `/api/findings` to prevent caller-supplied file spoofing ([#1155](https://github.com/GauravKarakoti/SecureFlow/issues/1155)).
 - Upstream Groq LLM rate-limit (429) and timeout failover handling across secondary and tertiary model chains in scanner and AI flows ([#1182](https://github.com/GauravKarakoti/SecureFlow/issues/1182)).
 - Enforced route-specific Redis rate limiting across AI, authentication, and general endpoints in proxy middleware ([#1243](https://github.com/GauravKarakoti/SecureFlow/issues/1243)).
@@ -29,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [0.1.0] - 2026-09-15
 
 ### Added
+
 - Initial core release of SecureFlow enterprise application platform.
 - Next.js 15 App Router web dashboard with real-time security findings, analytics, audit log viewer, and policy manager.
 - BullMQ Redis-backed worker queues for asynchronous vulnerability scans and SBOM generation.

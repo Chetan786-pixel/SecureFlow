@@ -86,7 +86,8 @@ export function applyScopedUnifiedDiff(
         oldCount += 1;
         newCount += 1;
       } else if (line.startsWith("-")) {
-        if (sourceLines[sourceIndex] !== line.slice(1)) throw new Error("Patch removal does not match");
+        if (sourceLines[sourceIndex] !== line.slice(1))
+          throw new Error("Patch removal does not match");
         sourceIndex += 1;
         oldCount += 1;
       } else if (line.startsWith("+")) {

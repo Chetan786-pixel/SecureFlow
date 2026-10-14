@@ -4,10 +4,7 @@ import { App } from "octokit";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 import { getGitHubAppCredentials } from "@/lib/github/app-auth";
-import {
-  applyScopedUnifiedDiff,
-  isAllowedAutoRemediationPath,
-} from "@/lib/armor/auto-remediation";
+import { applyScopedUnifiedDiff, isAllowedAutoRemediationPath } from "@/lib/armor/auto-remediation";
 import { withErrorHandler, AppError } from "@/lib/middleware/error-handler";
 
 async function readScopedSource(
@@ -85,7 +82,10 @@ const handler = async function POST(
     return NextResponse.json({ error: "No generated patch is awaiting approval" }, { status: 409 });
   }
   if (!isAllowedAutoRemediationPath(finding.fileLocation)) {
-    return NextResponse.json({ error: "Finding is outside the allowed src/** scope" }, { status: 403 });
+    return NextResponse.json(
+      { error: "Finding is outside the allowed src/** scope" },
+      { status: 403 },
+    );
   }
 
   const [owner, repo, ...extra] = finding.scanResult.pullRequest.repository.fullName.split("/");
@@ -114,7 +114,10 @@ const handler = async function POST(
       finding.fileLocation,
     );
     if (source === null) {
-      return NextResponse.json({ error: "Source file is not available for remediation" }, { status: 409 });
+      return NextResponse.json(
+        { error: "Source file is not available for remediation" },
+        { status: 409 },
+      );
     }
 
     const updatedContent = applyScopedUnifiedDiff(
@@ -149,7 +152,12 @@ const handler = async function POST(
     const branch = `secureflow/remediation-${finding.id.slice(-8)}-${patchHash}`;
     let commitSha = commit.data.sha;
     try {
-      await octokit.rest.git.createRef({ owner, repo, ref: `refs/heads/${branch}`, sha: commitSha });
+      await octokit.rest.git.createRef({
+        owner,
+        repo,
+        ref: `refs/heads/${branch}`,
+        sha: commitSha,
+      });
     } catch (error) {
       if ((error as { status?: number }).status !== 422) throw error;
       const existingRef = await octokit.rest.git.getRef({ owner, repo, ref: `heads/${branch}` });
@@ -167,25 +175,27 @@ const handler = async function POST(
     const existingPullRequest = existingPullRequests.data[0];
     const pullRequest = existingPullRequest
       ? existingPullRequest
-      : await octokit.rest.pulls.create({
-          owner,
-          repo,
-          title: `Security fix: ${finding.type.toLowerCase()} in ${finding.fileLocation}`,
-          head: branch,
-          base,
-          draft: true,
-          body: [
-            "## SecureFlow remediation",
-            "",
-            "This draft pull request contains an AI-generated security fix approved by a repository owner.",
-            "",
-            `Finding: ${finding.id}`,
-            `File: \`${finding.fileLocation}\``,
-            finding.explanation ? `\n${finding.explanation}` : "",
-            "",
-            "Please review and run the repository checks before merging.",
-          ].join("\n"),
-        }).then((result) => result.data);
+      : await octokit.rest.pulls
+          .create({
+            owner,
+            repo,
+            title: `Security fix: ${finding.type.toLowerCase()} in ${finding.fileLocation}`,
+            head: branch,
+            base,
+            draft: true,
+            body: [
+              "## SecureFlow remediation",
+              "",
+              "This draft pull request contains an AI-generated security fix approved by a repository owner.",
+              "",
+              `Finding: ${finding.id}`,
+              `File: \`${finding.fileLocation}\``,
+              finding.explanation ? `\n${finding.explanation}` : "",
+              "",
+              "Please review and run the repository checks before merging.",
+            ].join("\n"),
+          })
+          .then((result) => result.data);
 
     await prisma.remediationPatch.update({
       where: { findingId: finding.id },
@@ -200,7 +210,10 @@ const handler = async function POST(
     });
   } catch (error) {
     console.error("[AUTO_REMEDIATION] Failed to create approved pull request:", error);
-    return NextResponse.json({ error: "Unable to create remediation pull request" }, { status: 502 });
+    return NextResponse.json(
+      { error: "Unable to create remediation pull request" },
+      { status: 502 },
+    );
   }
 };
 

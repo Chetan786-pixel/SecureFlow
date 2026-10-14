@@ -93,4 +93,3 @@ describe("AuditLogTable component", () => {
     expect((element.props.initialResult.logs[0].metadata as any).isArmorIQ).toBe(true);
   });
 });
-
