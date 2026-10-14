@@ -12,11 +12,7 @@ import StreamingExplanation from "@/components/streaming-explanation";
 
 export const dynamic = "force-dynamic";
 
-export default async function FindingDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function FindingDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user?.id) {
     redirect("/api/auth/signin");
@@ -84,9 +80,7 @@ export default async function FindingDetailPage({
                 </CardTitle>
                 <Badge className={theme.badgeClass}>{theme.label}</Badge>
                 {finding.promptInjectionSuspected && (
-                  <Badge className="bg-yellow-500 text-black">
-                    ⚠️ Verify manually
-                  </Badge>
+                  <Badge className="bg-yellow-500 text-black">⚠️ Verify manually</Badge>
                 )}
               </div>
               <p className="text-xs font-mono text-muted-foreground">
