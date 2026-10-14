@@ -1,10 +1,7 @@
 import { createHmac, createHash } from "node:crypto";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
+import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
 export interface ThreatIntelligenceEntry {
   id: string;
@@ -19,39 +16,47 @@ export const KNOWLEDGE_BASE: ThreatIntelligenceEntry[] = [
   {
     id: "CVE-2023-3409",
     category: "SQL Injection",
-    description: "Improper neutralization of special elements used in an SQL command leads to arbitrary data exfiltration.",
+    description:
+      "Improper neutralization of special elements used in an SQL command leads to arbitrary data exfiltration.",
     severity: "critical",
     cve: "CVE-2023-3409",
-    remediationGuidance: "Replace string concatenation with parameterized prepared statements or ORM abstractions with strict type casting.",
+    remediationGuidance:
+      "Replace string concatenation with parameterized prepared statements or ORM abstractions with strict type casting.",
   },
   {
     id: "CVE-2023-28154",
     category: "Server-Side Request Forgery",
-    description: "SSRF vulnerability allowing attackers to make arbitrary network requests from the server to internal metadata endpoints or private subnets.",
+    description:
+      "SSRF vulnerability allowing attackers to make arbitrary network requests from the server to internal metadata endpoints or private subnets.",
     severity: "high",
     cve: "CVE-2023-28154",
-    remediationGuidance: "Enforce strict allowlists of public protocols (HTTPS only) and disallow loopback (127.0.0.1) or link-local/private IP ranges.",
+    remediationGuidance:
+      "Enforce strict allowlists of public protocols (HTTPS only) and disallow loopback (127.0.0.1) or link-local/private IP ranges.",
   },
   {
     id: "SEC-LEAK-001",
     category: "Secret Logging",
     description: "Sensitive secrets, tokens, or private keys exposed in runtime application logs.",
     severity: "high",
-    remediationGuidance: "Mask or redact secret variables prior to logging, or omit credentials entirely from logging sinks.",
+    remediationGuidance:
+      "Mask or redact secret variables prior to logging, or omit credentials entirely from logging sinks.",
   },
   {
     id: "CWE-79",
     category: "Cross-Site Scripting",
     description: "Unsanitized user-controlled input rendered directly into DOM or HTML output.",
     severity: "high",
-    remediationGuidance: "Use context-aware HTML entity encoding or modern reactive framework templating that auto-escapes dynamic values.",
+    remediationGuidance:
+      "Use context-aware HTML entity encoding or modern reactive framework templating that auto-escapes dynamic values.",
   },
   {
     id: "CWE-94",
     category: "Prompt Injection",
-    description: "Adversarial override attempting to hijack LLM system instructions or exfiltrate private intent tokens.",
+    description:
+      "Adversarial override attempting to hijack LLM system instructions or exfiltrate private intent tokens.",
     severity: "critical",
-    remediationGuidance: "Wrap tool execution behind cryptographic intent verification (ArmorIQ) and apply fail-closed boundary enforcement.",
+    remediationGuidance:
+      "Wrap tool execution behind cryptographic intent verification (ArmorIQ) and apply fail-closed boundary enforcement.",
   },
 ];
 
@@ -106,7 +111,8 @@ export function verifyDeclaredIntent(
       return {
         verified: false,
         allowed: false,
-        reason: "Action blocked by ArmorIQ: Cryptographic intent token signature is invalid or tampered",
+        reason:
+          "Action blocked by ArmorIQ: Cryptographic intent token signature is invalid or tampered",
       };
     }
   }
@@ -138,7 +144,7 @@ export function createThreatIntelMcpServer(): Server {
       capabilities: {
         tools: {},
       },
-    }
+    },
   );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -146,13 +152,15 @@ export function createThreatIntelMcpServer(): Server {
       tools: [
         {
           name: "query_threat_intelligence",
-          description: "Search live threat intelligence and CVE databases for security context and remediation recommendations.",
+          description:
+            "Search live threat intelligence and CVE databases for security context and remediation recommendations.",
           inputSchema: {
             type: "object",
             properties: {
               query: {
                 type: "string",
-                description: "Search keyword, vulnerability type, or CVE identifier (e.g., 'SQL injection', 'CVE-2023-3409')",
+                description:
+                  "Search keyword, vulnerability type, or CVE identifier (e.g., 'SQL injection', 'CVE-2023-3409')",
               },
               intentToken: {
                 type: "string",
@@ -164,7 +172,8 @@ export function createThreatIntelMcpServer(): Server {
         },
         {
           name: "lookup_cve",
-          description: "Look up detailed threat advisory, severity, and remediation guidance for a specific CVE or CWE ID.",
+          description:
+            "Look up detailed threat advisory, severity, and remediation guidance for a specific CVE or CWE ID.",
           inputSchema: {
             type: "object",
             properties: {
@@ -189,7 +198,11 @@ export function createThreatIntelMcpServer(): Server {
     const intentToken = (args as any)?.intentToken;
 
     // Cryptographic intent verification gate: reject any drift or injection attempt fail-closed
-    const intentVerification = verifyDeclaredIntent(name, (args as Record<string, unknown>) || {}, intentToken);
+    const intentVerification = verifyDeclaredIntent(
+      name,
+      (args as Record<string, unknown>) || {},
+      intentToken,
+    );
     if (!intentVerification.allowed) {
       return {
         isError: true,
@@ -212,14 +225,18 @@ export function createThreatIntelMcpServer(): Server {
         (item) =>
           item.description.toLowerCase().includes(query) ||
           item.category.toLowerCase().includes(query) ||
-          (item.cve && item.cve.toLowerCase().includes(query))
+          (item.cve && item.cve.toLowerCase().includes(query)),
       );
 
       return {
         content: [
           {
             type: "text",
-            text: JSON.stringify(matches.length > 0 ? matches : KNOWLEDGE_BASE.slice(0, 2), null, 2),
+            text: JSON.stringify(
+              matches.length > 0 ? matches : KNOWLEDGE_BASE.slice(0, 2),
+              null,
+              2,
+            ),
           },
         ],
       };
@@ -228,7 +245,7 @@ export function createThreatIntelMcpServer(): Server {
     if (name === "lookup_cve") {
       const cveId = String((args as any)?.cveId || "").toUpperCase();
       const match = KNOWLEDGE_BASE.find(
-        (item) => item.id.toUpperCase() === cveId || (item.cve && item.cve.toUpperCase() === cveId)
+        (item) => item.id.toUpperCase() === cveId || (item.cve && item.cve.toUpperCase() === cveId),
       );
 
       if (match) {
@@ -267,7 +284,7 @@ export async function queryLiveThreatIntelligence(query: string): Promise<string
     (item) =>
       item.description.toLowerCase().includes(q) ||
       item.category.toLowerCase().includes(q) ||
-      (item.cve && item.cve.toLowerCase().includes(q))
+      (item.cve && item.cve.toLowerCase().includes(q)),
   );
 
   if (match) {

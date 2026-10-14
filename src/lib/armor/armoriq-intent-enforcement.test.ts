@@ -6,10 +6,7 @@ import {
   computeIntentHash,
   type ExecutionPlan,
 } from "./intent-signing";
-import {
-  armorIQRuntimeGatekeeper,
-  enforceRuntimeIntent,
-} from "@/ai/flows/heist-prompt-guard";
+import { armorIQRuntimeGatekeeper, enforceRuntimeIntent } from "@/ai/flows/heist-prompt-guard";
 import { emitExecutionPlan, signAgentIntent } from "@/ai/genkit";
 import { emitExecutionPlan as localEmitPlan } from "@/ai/local-model";
 
@@ -73,10 +70,7 @@ describe("ArmorIQ Agent Registry & Policy Definitions (#1275)", () => {
   });
 
   it("enforces zero-trust default deny on unregistered agents", () => {
-    const check = agentRegistry.validateToolCall(
-      "rogue-unregistered-agent",
-      "anyTool",
-    );
+    const check = agentRegistry.validateToolCall("rogue-unregistered-agent", "anyTool");
     expect(check.allowed).toBe(false);
     expect(check.rule).toBe("deny:unregistered_agent");
   });
@@ -90,10 +84,7 @@ describe("ArmorIQ Pre-Execution Intent Signing (#1275)", () => {
   };
 
   it("captures and cryptographically signs agent execution plans", () => {
-    const signed = declareAndSignIntent(
-      ARMORIQ_AGENT_IDS.REMEDIATION_PATCH_GENERATOR,
-      samplePlan,
-    );
+    const signed = declareAndSignIntent(ARMORIQ_AGENT_IDS.REMEDIATION_PATCH_GENERATOR, samplePlan);
 
     expect(signed.intentId).toMatch(/^intent_/);
     expect(signed.intentHash).toHaveLength(64);
@@ -106,10 +97,7 @@ describe("ArmorIQ Pre-Execution Intent Signing (#1275)", () => {
   });
 
   it("detects payload tampering in declared execution plans", () => {
-    const signed = declareAndSignIntent(
-      ARMORIQ_AGENT_IDS.REMEDIATION_PATCH_GENERATOR,
-      samplePlan,
-    );
+    const signed = declareAndSignIntent(ARMORIQ_AGENT_IDS.REMEDIATION_PATCH_GENERATOR, samplePlan);
 
     // Attacker modifies goal post-signing
     const tampered = {
@@ -126,10 +114,7 @@ describe("ArmorIQ Pre-Execution Intent Signing (#1275)", () => {
   });
 
   it("detects signature forgery", () => {
-    const signed = declareAndSignIntent(
-      ARMORIQ_AGENT_IDS.REMEDIATION_PATCH_GENERATOR,
-      samplePlan,
-    );
+    const signed = declareAndSignIntent(ARMORIQ_AGENT_IDS.REMEDIATION_PATCH_GENERATOR, samplePlan);
 
     const forged = {
       ...signed,
@@ -148,13 +133,10 @@ describe("ArmorIQ Pre-Execution Intent Signing (#1275)", () => {
     );
     expect(genkitSigned.signature).toBeDefined();
 
-    const localSigned = localEmitPlan(
-      ARMORIQ_AGENT_IDS.SECURITY_EXPLANATION_STREAMER,
-      {
-        goal: "Explain XSS finding",
-        proposedTools: ["generateExplanation"],
-      },
-    );
+    const localSigned = localEmitPlan(ARMORIQ_AGENT_IDS.SECURITY_EXPLANATION_STREAMER, {
+      goal: "Explain XSS finding",
+      proposedTools: ["generateExplanation"],
+    });
     expect(localSigned.signature).toBeDefined();
     expect(signAgentIntent).toBeDefined();
   });
@@ -168,10 +150,7 @@ describe("ArmorIQ Runtime Gatekeeper Enforcement (#1275)", () => {
       targetPaths: ["src/api/handler.ts"],
     };
 
-    const signedIntent = declareAndSignIntent(
-      ARMORIQ_AGENT_IDS.REMEDIATION_PATCH_GENERATOR,
-      plan,
-    );
+    const signedIntent = declareAndSignIntent(ARMORIQ_AGENT_IDS.REMEDIATION_PATCH_GENERATOR, plan);
 
     const result = await armorIQRuntimeGatekeeper({
       agentId: ARMORIQ_AGENT_IDS.REMEDIATION_PATCH_GENERATOR,
@@ -194,10 +173,7 @@ describe("ArmorIQ Runtime Gatekeeper Enforcement (#1275)", () => {
       proposedTools: ["generateUnifiedDiff"],
     };
 
-    const signedIntent = declareAndSignIntent(
-      ARMORIQ_AGENT_IDS.REMEDIATION_PATCH_GENERATOR,
-      plan,
-    );
+    const signedIntent = declareAndSignIntent(ARMORIQ_AGENT_IDS.REMEDIATION_PATCH_GENERATOR, plan);
 
     // Agent attempts to call undeclared tool
     const result = await enforceRuntimeIntent({
@@ -221,10 +197,7 @@ describe("ArmorIQ Runtime Gatekeeper Enforcement (#1275)", () => {
       proposedTools: ["fs.read"],
     };
 
-    const signedIntent = declareAndSignIntent(
-      ARMORIQ_AGENT_IDS.REMEDIATION_PATCH_GENERATOR,
-      plan,
-    );
+    const signedIntent = declareAndSignIntent(ARMORIQ_AGENT_IDS.REMEDIATION_PATCH_GENERATOR, plan);
 
     const result = await armorIQRuntimeGatekeeper({
       agentId: ARMORIQ_AGENT_IDS.REMEDIATION_PATCH_GENERATOR,
@@ -246,10 +219,7 @@ describe("ArmorIQ Runtime Gatekeeper Enforcement (#1275)", () => {
       proposedTools: ["generateUnifiedDiff"],
     };
 
-    const signedIntent = declareAndSignIntent(
-      ARMORIQ_AGENT_IDS.REMEDIATION_PATCH_GENERATOR,
-      plan,
-    );
+    const signedIntent = declareAndSignIntent(ARMORIQ_AGENT_IDS.REMEDIATION_PATCH_GENERATOR, plan);
 
     const tampered = {
       ...signedIntent,

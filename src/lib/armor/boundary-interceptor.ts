@@ -1,8 +1,5 @@
 import { createHmac, createHash } from "node:crypto";
-import {
-  AUTO_REMEDIATION_ARMORIQ_SCOPE,
-  isAllowedAutoRemediationPath,
-} from "./auto-remediation";
+import { AUTO_REMEDIATION_ARMORIQ_SCOPE, isAllowedAutoRemediationPath } from "./auto-remediation";
 
 export type AgentActionType =
   | "shell.exec"
@@ -229,7 +226,8 @@ export class ArmorIQBoundaryInterceptor {
     ) {
       return {
         rule: "deny:shell_execution",
-        reason: "Shell and arbitrary system command execution is prohibited by ArmorIQ boundary policy",
+        reason:
+          "Shell and arbitrary system command execution is prohibited by ArmorIQ boundary policy",
         category: "SYSTEM_COMMAND_EXECUTION",
       };
     }
@@ -242,7 +240,8 @@ export class ArmorIQBoundaryInterceptor {
     ) {
       return {
         rule: "deny:workflow_tampering",
-        reason: "Modifying or reading CI/CD workflows (.github/workflows/) is prohibited by ArmorIQ boundary policy",
+        reason:
+          "Modifying or reading CI/CD workflows (.github/workflows/) is prohibited by ArmorIQ boundary policy",
         category: "WORKFLOW_TAMPERING",
       };
     }
@@ -260,7 +259,8 @@ export class ArmorIQBoundaryInterceptor {
     ) {
       return {
         rule: "deny:prompt_injection_cwe_94",
-        reason: "Adversarial prompt injection attempting to hijack system instructions or exfiltrate private intent tokens (CWE-94) blocked by ArmorIQ boundary enforcement",
+        reason:
+          "Adversarial prompt injection attempting to hijack system instructions or exfiltrate private intent tokens (CWE-94) blocked by ArmorIQ boundary enforcement",
         category: "PROMPT_INJECTION_CWE_94",
       };
     }
@@ -282,7 +282,8 @@ export class ArmorIQBoundaryInterceptor {
     ) {
       return {
         rule: "deny:sensitive_credentials",
-        reason: "Accessing sensitive credential stores (~/.ssh, ~/.aws, .env, /etc/passwd) is blocked by ArmorIQ boundary policy",
+        reason:
+          "Accessing sensitive credential stores (~/.ssh, ~/.aws, .env, /etc/passwd) is blocked by ArmorIQ boundary policy",
         category: "CREDENTIAL_EXFILTRATION",
       };
     }
@@ -413,7 +414,9 @@ export class SecureFlowAgent {
     }
 
     if (/~\/\.ssh|\.ssh\/keys|\.ssh\/id_rsa|\.aws|\.env|\/etc\/passwd/i.test(lower)) {
-      const pathMatch = prompt.match(/(~\/\.ssh\/[a-zA-Z0-9_\-\.]+|\.ssh\/[a-zA-Z0-9_\-\.]+|\/etc\/passwd|\.env)/i);
+      const pathMatch = prompt.match(
+        /(~\/\.ssh\/[a-zA-Z0-9_\-\.]+|\.ssh\/[a-zA-Z0-9_\-\.]+|\/etc\/passwd|\.env)/i,
+      );
       return {
         type: "fs.read",
         path: pathMatch ? pathMatch[1] : "~/.ssh/keys",

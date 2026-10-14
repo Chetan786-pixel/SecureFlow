@@ -27,7 +27,8 @@ export const DEFAULT_AGENT_POLICIES: Record<string, AgentPolicyDefinition> = {
   [ARMORIQ_AGENT_IDS.REMEDIATION_PATCH_GENERATOR]: {
     agentId: ARMORIQ_AGENT_IDS.REMEDIATION_PATCH_GENERATOR,
     name: "Automated Patch Remediation Generator",
-    description: "Generates unified diff patches for detected vulnerabilities within scoped repository boundaries.",
+    description:
+      "Generates unified diff patches for detected vulnerabilities within scoped repository boundaries.",
     allowedTools: [
       "queryLiveThreatIntelligence",
       "generateUnifiedDiff",
@@ -35,12 +36,7 @@ export const DEFAULT_AGENT_POLICIES: Record<string, AgentPolicyDefinition> = {
       "mcp.threat_intel",
     ],
     allowedScopes: ["src/**", "tools/**"],
-    deniedTools: [
-      "shell.exec",
-      "github.push",
-      "github.pull_request.merge",
-      "fs.write.arbitrary",
-    ],
+    deniedTools: ["shell.exec", "github.push", "github.pull_request.merge", "fs.write.arbitrary"],
     complianceFrameworks: [
       "SOC 2 (CC6.1 - Logical Access)",
       "GDPR (Art. 32 - Security of Processing)",
@@ -51,7 +47,8 @@ export const DEFAULT_AGENT_POLICIES: Record<string, AgentPolicyDefinition> = {
   [ARMORIQ_AGENT_IDS.SECURITY_EXPLANATION_STREAMER]: {
     agentId: ARMORIQ_AGENT_IDS.SECURITY_EXPLANATION_STREAMER,
     name: "Security Explanation Streamer",
-    description: "Generates structured threat narratives and contextual explanations for security findings.",
+    description:
+      "Generates structured threat narratives and contextual explanations for security findings.",
     allowedTools: [
       "generateExplanation",
       "readCodeSnippet",
@@ -59,12 +56,7 @@ export const DEFAULT_AGENT_POLICIES: Record<string, AgentPolicyDefinition> = {
       "queryLiveThreatIntelligence",
     ],
     allowedScopes: ["read:findings", "read:snippets"],
-    deniedTools: [
-      "shell.exec",
-      "fs.write",
-      "github.push",
-      "github.pull_request.merge",
-    ],
+    deniedTools: ["shell.exec", "fs.write", "github.push", "github.pull_request.merge"],
     complianceFrameworks: [
       "SOC 2 (CC6.1 - Logical Access)",
       "NIST SP 800-53 (AC-3 - Access Enforcement)",
@@ -75,15 +67,10 @@ export const DEFAULT_AGENT_POLICIES: Record<string, AgentPolicyDefinition> = {
     agentId: ARMORIQ_AGENT_IDS.HEIST_TRANSMISSION,
     name: "Heist Transmission Public Agent",
     description: "Generates stylized public victory broadcasts and screens project labels.",
-    allowedTools: [
-      "screenProjectName",
-      "screenTransmission",
-    ],
+    allowedTools: ["screenProjectName", "screenTransmission"],
     allowedScopes: ["transmission:broadcast"],
     deniedTools: ["shell.exec", "fs.write", "fs.read", "github.*"],
-    complianceFrameworks: [
-      "NIST SP 800-53 (SI-10 - Information Input Validation)",
-    ],
+    complianceFrameworks: ["NIST SP 800-53 (SI-10 - Information Input Validation)"],
     requireCryptographicIntent: true,
   },
 };

@@ -175,4 +175,3 @@ export {
   type SignedIntent,
 } from "@/lib/armor/intent-signing";
 export { agentRegistry, ARMORIQ_AGENT_IDS } from "@/lib/armor/agent-registry";
-

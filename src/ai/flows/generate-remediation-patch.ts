@@ -39,7 +39,7 @@ export async function generateRemediationPatch(input: PatchInput): Promise<Patch
   try {
     const { queryLiveThreatIntelligence } = await import("../../../cli/src/mcp/index.js");
     threatIntelContext = await queryLiveThreatIntelligence(
-      `${validatedInput.findingDescription} ${validatedInput.filePath}`
+      `${validatedInput.findingDescription} ${validatedInput.filePath}`,
     );
   } catch {
     // Graceful degradation if MCP server module cannot be loaded

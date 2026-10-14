@@ -18,12 +18,7 @@ export default defineConfig({
       "cli/src/**/*.test.ts",
       "tests/**/*.test.ts",
     ],
-    exclude: [
-      "**/node_modules/**",
-      "**/dist/**",
-      "**/*.redteam.test.ts",
-      "**/*.redteam.test.tsx",
-    ],
+    exclude: ["**/node_modules/**", "**/dist/**", "**/*.redteam.test.ts", "**/*.redteam.test.tsx"],
     setupFiles: ["./vitest.setup.ts"],
     testTimeout: 15000,
     coverage: {

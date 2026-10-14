@@ -58,7 +58,10 @@ export function computeIntentHash(
 /**
  * Creates an HMAC-SHA256 signature for the intent hash.
  */
-export function signIntentHash(intentHash: string, signingKey: string = DEFAULT_SIGNING_KEY): string {
+export function signIntentHash(
+  intentHash: string,
+  signingKey: string = DEFAULT_SIGNING_KEY,
+): string {
   return createHmac("sha256", signingKey).update(intentHash).digest("hex");
 }
 
@@ -100,10 +103,7 @@ export function declareAndSignIntent(
     signature,
     intentToken,
     complianceMetadata: {
-      frameworks: policy?.complianceFrameworks ?? [
-        "SOC 2 (CC6.1)",
-        "NIST SP 800-53 (AC-3)",
-      ],
+      frameworks: policy?.complianceFrameworks ?? ["SOC 2 (CC6.1)", "NIST SP 800-53 (AC-3)"],
       tamperEvident: true,
     },
   };

@@ -1,7 +1,17 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Search, X, ChevronLeft, ChevronRight, History, Download, ShieldCheck, Lock, ShieldAlert } from "lucide-react";
+import {
+  Search,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  History,
+  Download,
+  ShieldCheck,
+  Lock,
+  ShieldAlert,
+} from "lucide-react";
 import {
   Table,
   TableBody,
@@ -395,8 +405,13 @@ export default function AuditLogTable({
                                 <summary className="cursor-pointer font-mono font-bold text-emerald-400 hover:text-emerald-300 flex items-center justify-between select-none">
                                   <span className="flex items-center gap-2 text-sm">
                                     <Lock className="w-3.5 h-3.5 text-emerald-400" />
-                                    <span>🛡️ ArmorIQ Cryptographic Intent & Compliance Evidence</span>
-                                    <Badge variant="outline" className="text-[9px] text-emerald-400 border-emerald-800/60 font-mono">
+                                    <span>
+                                      🛡️ ArmorIQ Cryptographic Intent & Compliance Evidence
+                                    </span>
+                                    <Badge
+                                      variant="outline"
+                                      className="text-[9px] text-emerald-400 border-emerald-800/60 font-mono"
+                                    >
                                       Tamper-Evident
                                     </Badge>
                                   </span>
@@ -415,7 +430,10 @@ export default function AuditLogTable({
                                         {meta.agentId || "Autonomous Agent"}
                                       </p>
                                       {meta.intentId && (
-                                        <p className="text-muted-foreground truncate" title={meta.intentId}>
+                                        <p
+                                          className="text-muted-foreground truncate"
+                                          title={meta.intentId}
+                                        >
                                           <span>Intent ID: </span>
                                           <span className="text-foreground">{meta.intentId}</span>
                                         </p>
@@ -432,13 +450,23 @@ export default function AuditLogTable({
                                       <span className="text-muted-foreground text-[10px] uppercase font-bold block">
                                         Cryptographic Provenance
                                       </span>
-                                      <p className="text-muted-foreground truncate" title={meta.proofHash}>
+                                      <p
+                                        className="text-muted-foreground truncate"
+                                        title={meta.proofHash}
+                                      >
                                         <span>Proof Hash: </span>
-                                        <span className="text-emerald-400 font-mono">{meta.proofHash || "N/A"}</span>
+                                        <span className="text-emerald-400 font-mono">
+                                          {meta.proofHash || "N/A"}
+                                        </span>
                                       </p>
-                                      <p className="text-muted-foreground truncate" title={meta.signature}>
+                                      <p
+                                        className="text-muted-foreground truncate"
+                                        title={meta.signature}
+                                      >
                                         <span>Signature: </span>
-                                        <span className="text-foreground font-mono">{meta.signature || "N/A"}</span>
+                                        <span className="text-foreground font-mono">
+                                          {meta.signature || "N/A"}
+                                        </span>
                                       </p>
                                     </div>
                                   </div>
@@ -448,17 +476,23 @@ export default function AuditLogTable({
                                       <span className="text-muted-foreground text-[10px] uppercase font-bold block mb-1">
                                         Gatekeeper Policy Decision
                                       </span>
-                                      <p className="text-foreground text-xs font-sans">{meta.reason}</p>
+                                      <p className="text-foreground text-xs font-sans">
+                                        {meta.reason}
+                                      </p>
                                     </div>
                                   )}
 
                                   <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                                    <span className="text-muted-foreground text-[10px] mr-1">Compliance Mapping:</span>
-                                    {((meta.complianceFrameworks as string[]) || [
-                                      "SOC 2 (CC6.1)",
-                                      "GDPR (Art. 32)",
-                                      "NIST SP 800-53 (AC-3, AU-2)",
-                                    ]).map((framework) => (
+                                    <span className="text-muted-foreground text-[10px] mr-1">
+                                      Compliance Mapping:
+                                    </span>
+                                    {(
+                                      (meta.complianceFrameworks as string[]) || [
+                                        "SOC 2 (CC6.1)",
+                                        "GDPR (Art. 32)",
+                                        "NIST SP 800-53 (AC-3, AU-2)",
+                                      ]
+                                    ).map((framework) => (
                                       <Badge
                                         key={framework}
                                         variant="secondary"

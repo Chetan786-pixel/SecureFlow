@@ -255,9 +255,7 @@ describe("Next.js Proxy Middleware Redis Rate Limiting (#1243)", () => {
 
       expect(res?.headers.get("X-RateLimit-Limit")).toBe("20");
       expect(res?.headers.get("X-RateLimit-Remaining")).toBe("0");
-      expect(res?.headers.get("X-RateLimit-Reset")).toBe(
-        Math.ceil(resetTime / 1000).toString(),
-      );
+      expect(res?.headers.get("X-RateLimit-Reset")).toBe(Math.ceil(resetTime / 1000).toString());
     });
 
     it("applies CSP and security headers even on 429 responses", async () => {
@@ -325,9 +323,7 @@ describe("Next.js Proxy Middleware Redis Rate Limiting (#1243)", () => {
 
     it("blocks request when user limit is exceeded even if IP has remaining quota", async () => {
       // First call (IP) succeeds, second call (user) is blocked
-      limitMock
-        .mockResolvedValueOnce(allowed(10, 20))
-        .mockResolvedValueOnce(blocked(10));
+      limitMock.mockResolvedValueOnce(allowed(10, 20)).mockResolvedValueOnce(blocked(10));
 
       const req = request("/api/leaderboard");
       req.auth = { user: { id: "user-budget-exhausted" } };
@@ -340,9 +336,7 @@ describe("Next.js Proxy Middleware Redis Rate Limiting (#1243)", () => {
     });
 
     it("supports token sub or id fallback when user.id is absent", async () => {
-      limitMock
-        .mockResolvedValueOnce(allowed())
-        .mockResolvedValueOnce(blocked());
+      limitMock.mockResolvedValueOnce(allowed()).mockResolvedValueOnce(blocked());
 
       const req = request("/api/leaderboard");
       (req as any).auth = { sub: "sub-user-token" };
@@ -354,9 +348,7 @@ describe("Next.js Proxy Middleware Redis Rate Limiting (#1243)", () => {
     });
 
     it("supports token.id fallback when user.id is absent", async () => {
-      limitMock
-        .mockResolvedValueOnce(allowed())
-        .mockResolvedValueOnce(blocked());
+      limitMock.mockResolvedValueOnce(allowed()).mockResolvedValueOnce(blocked());
 
       const req = request("/api/leaderboard");
       (req as any).auth = { id: "token-id-fallback" };
@@ -371,9 +363,7 @@ describe("Next.js Proxy Middleware Redis Rate Limiting (#1243)", () => {
   describe("5. Independent Class Bucketing & Cross-Contamination Prevention", () => {
     it("isolates auth class budget from standard class budget", async () => {
       // Standard is blocked, auth is allowed
-      limitMock
-        .mockResolvedValueOnce(blocked())
-        .mockResolvedValueOnce(allowed());
+      limitMock.mockResolvedValueOnce(blocked()).mockResolvedValueOnce(allowed());
 
       const standardReq = await middleware(request("/api/leaderboard"));
       const authReq = await middleware(request("/api/auth/session"));
@@ -388,9 +378,7 @@ describe("Next.js Proxy Middleware Redis Rate Limiting (#1243)", () => {
 
     it("isolates AI stream class budget from general API budget", async () => {
       // Stream is blocked, standard is allowed
-      limitMock
-        .mockResolvedValueOnce(blocked())
-        .mockResolvedValueOnce(allowed());
+      limitMock.mockResolvedValueOnce(blocked()).mockResolvedValueOnce(allowed());
 
       const streamReq = await middleware(request("/api/heist-transmission"));
       const standardReq = await middleware(request("/api/projects"));
@@ -420,10 +408,7 @@ describe("Next.js Proxy Middleware Redis Rate Limiting (#1243)", () => {
 
   describe("6. Edge Case and Failure Resilience", () => {
     it("handles missing limiter instance gracefully without crashing", async () => {
-      const getApiRateLimiterSpy = vi.spyOn(
-        await import("@/lib/rate-limit"),
-        "getApiRateLimiter",
-      );
+      const getApiRateLimiterSpy = vi.spyOn(await import("@/lib/rate-limit"), "getApiRateLimiter");
       getApiRateLimiterSpy.mockReturnValueOnce(null as any);
 
       const res = await middleware(request("/api/leaderboard"));

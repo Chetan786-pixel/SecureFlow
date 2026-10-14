@@ -682,4 +682,3 @@ export async function parseSarifFileStream(
 
   return { results, totalResults };
 }
-
