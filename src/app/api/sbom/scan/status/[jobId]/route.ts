@@ -73,7 +73,40 @@ const handler = withErrorHandler(async function GET(
     throw new AppError("Scan job not found", 404);
   }
 
-  return NextResponse.json(statusInfo, {
+  // Support pagination on packages to prevent memory exhaustion on massive manifests
+  const { searchParams } = new URL(req.url);
+  const pageParam = searchParams.get("page");
+  const pageSizeParam = searchParams.get("pageSize");
+
+  let paginatedResult = statusInfo.result;
+  let paginationMeta: Record<string, unknown> | undefined;
+
+  if (statusInfo.result && (pageParam || pageSizeParam)) {
+    const page = Math.max(1, parseInt(pageParam || "1", 10) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(pageSizeParam || "50", 10) || 50));
+    const offset = (page - 1) * pageSize;
+
+    const totalPackages = statusInfo.result.packages?.length || 0;
+    const paginatedPackages = statusInfo.result.packages?.slice(offset, offset + pageSize) || [];
+
+    paginatedResult = {
+      ...statusInfo.result,
+      packages: paginatedPackages,
+    };
+
+    paginationMeta = {
+      page,
+      pageSize,
+      totalPackages,
+      totalPages: Math.ceil(totalPackages / pageSize) || 1,
+    };
+  }
+
+  const responseBody = paginationMeta
+    ? { ...statusInfo, result: paginatedResult, pagination: paginationMeta }
+    : statusInfo;
+
+  return NextResponse.json(responseBody, {
     status: 200,
     headers: {
       "Cache-Control": "no-store, no-cache, must-revalidate",
