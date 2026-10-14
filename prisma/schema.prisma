@@ -224,6 +224,7 @@ model Finding {
   fingerprint              String            @default("")
   createdAt                DateTime          @default(now())
   remediationPatch         RemediationPatch?
+  armorIQLogs              ArmorIQEnforcementLog[]
 
   @@index([scanResultId])
   @@index([fingerprint])
@@ -378,6 +379,7 @@ model ScanJob {
   processingToken      String?
   leaseExpiresAt       DateTime?
   completedAt          DateTime?
+  armorIQLogs          ArmorIQEnforcementLog[]
   createdAt            DateTime        @default(now())
   updatedAt            DateTime        @updatedAt
 
@@ -401,3 +403,29 @@ model AuditEventLedger {
   @@index([action])
   @@index([timestamp(sort: Desc)])
 }
+
+model ArmorIQEnforcementLog {
+  id            String    @id @default(cuid())
+  scanJobId     String?
+  scanJob       ScanJob?  @relation(fields: [scanJobId], references: [id], onDelete: SetNull)
+  findingId     String?
+  finding       Finding?  @relation(fields: [findingId], references: [id], onDelete: SetNull)
+  agentId       String
+  toolName      String
+  decision      String    // "ALLOW", "BLOCK", "HOLD"
+  ruleMatched   String?
+  justification String?   @db.Text
+  proofHash     String?
+  signature     String?
+  intentId      String?
+  frameworks    String[]  @default(["SOC 2", "ISO 27001"])
+  privacyLevel  String    @default("REDACTED")
+  timestamp     DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+
+  @@index([scanJobId])
+  @@index([findingId])
+  @@index([decision])
+  @@index([timestamp(sort: Desc)])
+}
+
