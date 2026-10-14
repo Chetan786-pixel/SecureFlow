@@ -11,6 +11,7 @@ import {
   describeFailThreshold,
   filterBySeverity,
   parseSeverityFilter,
+  generateVoiceSummaryText,
   type FileScanResult,
   type OutputFormat,
   type Severity,
@@ -27,7 +28,9 @@ import {
   parseIgnoreFilePath,
   parseOutputFormat,
   parseOutputPath,
+  parseVoiceArg,
 } from "./lib/output-args.js";
+import { playVoiceDebrief } from "./lib/audio-player.js";
 
 const VERBOSE = process.argv.includes("--verbose");
 const DRY_RUN = process.argv.includes("--dry-run");
@@ -80,10 +83,12 @@ Options:
   --local                Run scan locally without uploading files externally
   --local-model <tag>    Specify local AI model tag (default: llama3)
   --dry-run              Simulate scan execution without writing files
+  -v, --voice            Play an audio summary debrief of scan findings upon completion
   -h, --help             Show this help message
 
 Examples:
   $ secureflow                                     # Run standard security scan on staged files
+  $ secureflow -v                                  # Run scan and play audio summary debrief
   $ secureflow mcp                                 # Start the Threat Intelligence MCP server over stdio
   $ secureflow --format json -o res.json           # Scan and export results to JSON file
   $ secureflow --fail-on high                      # Fail commit only on high/critical findings
@@ -229,6 +234,7 @@ async function main(): Promise<number> {
     console.error(`❌ [SecureFlow] ${error.message}`);
     return 1;
   }
+  const voiceEnabled = parseVoiceArg(process.argv);
   const severityFilter = parseSeverityArg();
   let staged: string[];
 
@@ -339,6 +345,14 @@ ${textOutput}`);
   // filter, not a security gate bypass. --fail-on must see every finding.
   const shouldFail = shouldFailScan(violationCount, aiFindings, failOnThreshold);
   const blockingAi = blockingAiFindings(aiFindings, failOnThreshold);
+
+  if (voiceEnabled) {
+    const summaryText = generateVoiceSummaryText(violationCount, aiFindings, !shouldFail);
+    await playVoiceDebrief(summaryText, {
+      files: stagedForAi,
+      verbose: VERBOSE,
+    });
+  }
 
   if (shouldFail) {
     if (format === "text") {
