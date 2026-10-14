@@ -21,6 +21,9 @@ import { withErrorHandler, AppError } from "@/lib/middleware/error-handler";
  */
 const MAX_BULK_REMEDIATION_FINDINGS = MAX_PAGE_SIZE;
 
+/** Maximum allowed payload size for bulk remediation requests (128 KB). */
+export const MAX_BULK_REQUEST_BYTES = 128 * 1024;
+
 /* POST /api/findings/bulk-remediate */
 const handler = async function POST(req: NextRequest) {
   try {
@@ -29,6 +32,18 @@ const handler = async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const userId = session.user.id;
+
+    // Early Content-Length check to reject oversized payloads before buffering
+    const contentLengthHeader = req.headers.get("content-length");
+    if (contentLengthHeader) {
+      const contentLength = parseInt(contentLengthHeader, 10);
+      if (!Number.isNaN(contentLength) && contentLength > MAX_BULK_REQUEST_BYTES) {
+        return NextResponse.json(
+          { error: "Request payload exceeds maximum allowed size" },
+          { status: 413 },
+        );
+      }
+    }
 
     // Strict user-based token bucket: inner guard keyed per authenticated user
     const userLimit = await checkRateLimitDetailed(
@@ -56,9 +71,23 @@ const handler = async function POST(req: NextRequest) {
       );
     }
 
+    let rawText: string;
+    try {
+      rawText = await req.text();
+    } catch {
+      return NextResponse.json({ error: "Cannot read request body" }, { status: 400 });
+    }
+
+    if (Buffer.byteLength(rawText, "utf-8") > MAX_BULK_REQUEST_BYTES) {
+      return NextResponse.json(
+        { error: "Request payload exceeds maximum allowed size" },
+        { status: 413 },
+      );
+    }
+
     let body: { action?: string; findingIds?: unknown };
     try {
-      body = await req.json();
+      body = JSON.parse(rawText);
     } catch {
       return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
