@@ -1,7 +1,7 @@
 import SettingsClient from "./settings-client";
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
-import { getSlackWebhook } from "@/lib/actions/settings";
+import { getSlackWebhook, getVoiceAlerts } from "@/lib/actions/settings";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +12,15 @@ export default async function SettingsPage() {
     redirect("/api/auth/signin");
   }
 
-  const initialWebhookUrl = await getSlackWebhook();
+  const [initialWebhookUrl, initialVoiceAlertsEnabled] = await Promise.all([
+    getSlackWebhook(),
+    getVoiceAlerts(),
+  ]);
 
-  return <SettingsClient initialWebhookUrl={initialWebhookUrl} />;
+  return (
+    <SettingsClient
+      initialWebhookUrl={initialWebhookUrl}
+      initialVoiceAlertsEnabled={initialVoiceAlertsEnabled}
+    />
+  );
 }
