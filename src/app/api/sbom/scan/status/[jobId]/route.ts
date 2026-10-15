@@ -87,16 +87,20 @@ const handler = withErrorHandler(async function GET(
     SbomScanResultWithPackages | undefined;
   let paginationMeta: Record<string, unknown> | undefined;
 
-  if (paginatedResult && (pageParam || pageSizeParam)) {
+  if (statusInfo.result && (pageParam || pageSizeParam)) {
+    // Safely cast result to include optional packages property for TypeScript checking
+    const resultWithPackages = statusInfo.result as typeof statusInfo.result & {
+      packages?: unknown[];
+    };
     const page = Math.max(1, parseInt(pageParam || "1", 10) || 1);
     const pageSize = Math.min(100, Math.max(1, parseInt(pageSizeParam || "50", 10) || 50));
     const offset = (page - 1) * pageSize;
 
-    const totalPackages = paginatedResult.packages?.length || 0;
-    const paginatedPackages = paginatedResult.packages?.slice(offset, offset + pageSize) || [];
+    const totalPackages = resultWithPackages.packages?.length || 0;
+    const paginatedPackages = resultWithPackages.packages?.slice(offset, offset + pageSize) || [];
 
     paginatedResult = {
-      ...paginatedResult,
+      ...resultWithPackages,
       packages: paginatedPackages,
     };
 

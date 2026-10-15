@@ -5,6 +5,8 @@ import { CyberRainBackground } from "./cyber-rain-background";
 import { cn } from "@/lib/utils";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { useRadioAudio } from "@/hooks/use-radio-audio";
+import { RadioControls } from "./radio-controls";
 import Link from "next/link";
 
 /**
@@ -182,6 +184,15 @@ export function HeistTransmission({
   const pauseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const streamStartTimeRef = useRef<number>(0);
   const streamCharCountRef = useRef<number>(0);
+  const {
+    enabled: radioEnabled,
+    analyser: radioAnalyser,
+    toggle: toggleRadio,
+    playSquelch,
+  } = useRadioAudio();
+  const handleRadioToggle = () => {
+    void toggleRadio().then(() => playSquelch("start"));
+  };
 
   // ── Easter egg state ─────────────────────────────────────────────────────────
   const [bgTheme, setBgTheme] = useState<"heist" | "matrix" | "glitch">("heist");
@@ -266,6 +277,7 @@ export function HeistTransmission({
     // Queue for variable typing cadence processing
     const textQueue: string[] = [];
     let isProcessingQueue = false;
+    let startSquelchPlayed = false;
 
     const THEMATIC_KEYWORDS = [
       "BELLA CIAO",
@@ -319,6 +331,10 @@ export function HeistTransmission({
           | { type: "error"; message: string };
 
         if (event.type === "chunk") {
+          if (!startSquelchPlayed) {
+            startSquelchPlayed = true;
+            playSquelch("start");
+          }
           // Calculate tokens per second (approx 4 chars per token)
           streamCharCountRef.current = event.text.length;
           const elapsedSec = Math.max(0.1, (Date.now() - streamStartTimeRef.current) / 1000);
@@ -332,6 +348,7 @@ export function HeistTransmission({
         } else if (event.type === "done") {
           textQueue.push(event.message);
           processQueue().then(() => {
+            playSquelch("end");
             setAiMessage(event.message);
             setAiLoading(false);
             setIsTyping(false);
@@ -640,6 +657,12 @@ export function HeistTransmission({
             &gt;&gt; skip decryption
           </button>
         )}
+        <RadioControls
+          enabled={radioEnabled}
+          analyser={radioAnalyser}
+          onToggle={handleRadioToggle}
+          className="mt-3 sm:mt-4"
+        />
       </main>
 
       <footer className="py-3 sm:py-4 text-center relative z-10">
