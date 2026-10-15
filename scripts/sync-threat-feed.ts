@@ -74,10 +74,19 @@ async function main() {
     console.log("\n✅ Red-team dataset is up to date.");
   }
 
-  process.exit(0);
+  return 0;
 }
 
-main().catch((err) => {
-  console.error("❌ Fatal error during threat feed sync:", err);
-  process.exit(1);
-});
+export { main as syncThreatFeedMain };
+
+const isMain = process.argv[1] && /sync-threat-feed(\.ts|\.js)?$/.test(process.argv[1]);
+if (isMain) {
+  main()
+    .then((code) => {
+      process.exit(code ?? 0);
+    })
+    .catch((err) => {
+      console.error("❌ Fatal error during threat feed sync:", err);
+      process.exit(1);
+    });
+}

@@ -1,0 +1,109 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+const { loadThreatFeedDatasetMock, syncThreatFeedsMock } = vi.hoisted(() => ({
+  loadThreatFeedDatasetMock: vi.fn(),
+  syncThreatFeedsMock: vi.fn(),
+}));
+
+vi.mock("../src/lib/security/threat-feed", () => ({
+  DEFAULT_FEED_PATH: "/mock/default/threat-feed.json",
+  DEFAULT_THREAT_FEED_SOURCES: [
+    { name: "Source 1", url: "https://example.com/feed1", enabled: true },
+    { name: "Source 2", url: "https://example.com/feed2", enabled: false },
+  ],
+  loadThreatFeedDataset: loadThreatFeedDatasetMock,
+  syncThreatFeeds: syncThreatFeedsMock,
+}));
+
+import { syncThreatFeedMain } from "./sync-threat-feed";
+
+describe("scripts/sync-threat-feed.ts (#1330)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    loadThreatFeedDatasetMock.mockReturnValue({ payloads: [{ id: "p1" }, { id: "p2" }] });
+    syncThreatFeedsMock.mockResolvedValue({
+      success: true,
+      totalPayloads: 5,
+      newPayloadsAdded: 3,
+      sourcesSynced: ["Source 1"],
+      errors: [],
+      categoryCounts: {
+        ROLE_PLAY_JAILBREAK: 3,
+        PROMPT_LEAKAGE: 2,
+      },
+    });
+  });
+
+  it("executes threat feed synchronization in default mode", async () => {
+    const originalArgv = process.argv;
+    process.argv = ["node", "scripts/sync-threat-feed.ts", "--quiet"];
+
+    const exitCode = await syncThreatFeedMain();
+    expect(exitCode).toBe(0);
+
+    expect(loadThreatFeedDatasetMock).toHaveBeenCalledWith("/mock/default/threat-feed.json");
+    expect(syncThreatFeedsMock).toHaveBeenCalledWith({
+      outputPath: "/mock/default/threat-feed.json",
+      sources: expect.any(Array),
+    });
+
+    process.argv = originalArgv;
+  });
+
+  it("supports --dry-run mode without mutating production dataset path", async () => {
+    const originalArgv = process.argv;
+    process.argv = ["node", "scripts/sync-threat-feed.ts", "--dry-run", "--quiet"];
+
+    const exitCode = await syncThreatFeedMain();
+    expect(exitCode).toBe(0);
+
+    expect(syncThreatFeedsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outputPath: expect.stringContaining("tmp_dry_run_feed.json"),
+      }),
+    );
+
+    process.argv = originalArgv;
+  });
+
+  it("handles custom output path passed via --out", async () => {
+    const originalArgv = process.argv;
+    process.argv = [
+      "node",
+      "scripts/sync-threat-feed.ts",
+      "--out",
+      "custom-output.json",
+      "--quiet",
+    ];
+
+    const exitCode = await syncThreatFeedMain();
+    expect(exitCode).toBe(0);
+
+    expect(syncThreatFeedsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outputPath: expect.stringContaining("custom-output.json"),
+      }),
+    );
+
+    process.argv = originalArgv;
+  });
+
+  it("reports warnings and errors when upstream feed fetch encounters issues", async () => {
+    syncThreatFeedsMock.mockResolvedValueOnce({
+      success: false,
+      totalPayloads: 2,
+      newPayloadsAdded: 0,
+      sourcesSynced: [],
+      errors: ["HTTP 503 from external feed provider"],
+      categoryCounts: {},
+    });
+
+    const originalArgv = process.argv;
+    process.argv = ["node", "scripts/sync-threat-feed.ts", "--quiet"];
+
+    const exitCode = await syncThreatFeedMain();
+    expect(exitCode).toBe(0);
+
+    process.argv = originalArgv;
+  });
+});

@@ -57,7 +57,16 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 5
           resources:
+            {{- if and .Values.postgresql.resources .Values.postgresql.resources.limits .Values.postgresql.resources.requests }}
             {{- toYaml .Values.postgresql.resources | nindent 12 }}
+            {{- else }}
+            limits:
+              cpu: {{ default "1000m" (dig "limits" "cpu" "1000m" .Values.postgresql.resources) | quote }}
+              memory: {{ default "1024Mi" (dig "limits" "memory" "1024Mi" .Values.postgresql.resources) | quote }}
+            requests:
+              cpu: {{ default "250m" (dig "requests" "cpu" "250m" .Values.postgresql.resources) | quote }}
+              memory: {{ default "256Mi" (dig "requests" "memory" "256Mi" .Values.postgresql.resources) | quote }}
+            {{- end }}
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql/data

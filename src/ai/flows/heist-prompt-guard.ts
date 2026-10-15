@@ -352,12 +352,21 @@ export async function evaluatePromptSafety(
   options?: PromptSafetyOptions,
 ): Promise<PromptSafetyEvaluation> {
   if (options?.intentToken !== undefined) {
-    const verification = await verifyArmorIQStep(options.intentToken, options);
-    if (!verification.allowed) {
+    try {
+      const verification = await verifyArmorIQStep(options.intentToken, options);
+      if (!verification.allowed) {
+        return {
+          isSafe: false,
+          flaggedReason: verification.reason || "verification_failed_unreachable",
+          armorIQVerification: verification,
+        };
+      }
+    } catch (error: any) {
+      // Timeout or connectivity failure in AI/policy service: enforce fail-closed
+      logger.error("[PROMPT_GUARD_TIMEOUT] Intent verification timed out or failed:", { error });
       return {
         isSafe: false,
-        flaggedReason: verification.reason || "verification_failed_unreachable",
-        armorIQVerification: verification,
+        flaggedReason: "intent_verification_timeout_fail_closed",
       };
     }
   }

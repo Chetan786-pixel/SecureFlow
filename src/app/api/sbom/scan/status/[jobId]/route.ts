@@ -14,6 +14,11 @@ import prisma from "@/lib/prisma";
 import { withErrorHandler, AppError } from "@/lib/middleware/error-handler";
 import { withRateLimit, TIERS } from "@/lib/middleware/rate-limit";
 import { getSbomJobStatus } from "@/lib/queue/sbomQueue";
+import { SbomScanResult } from "@/types/sbom";
+
+type SbomScanResultWithPackages = SbomScanResult & {
+  packages?: unknown[];
+};
 
 const handler = withErrorHandler(async function GET(
   req: NextRequest,
@@ -78,7 +83,8 @@ const handler = withErrorHandler(async function GET(
   const pageParam = searchParams.get("page");
   const pageSizeParam = searchParams.get("pageSize");
 
-  let paginatedResult: unknown = statusInfo.result;
+  let paginatedResult: SbomScanResultWithPackages | undefined = statusInfo.result as
+    SbomScanResultWithPackages | undefined;
   let paginationMeta: Record<string, unknown> | undefined;
 
   if (statusInfo.result && (pageParam || pageSizeParam)) {
@@ -86,7 +92,6 @@ const handler = withErrorHandler(async function GET(
     const resultWithPackages = statusInfo.result as typeof statusInfo.result & {
       packages?: unknown[];
     };
-
     const page = Math.max(1, parseInt(pageParam || "1", 10) || 1);
     const pageSize = Math.min(100, Math.max(1, parseInt(pageSizeParam || "50", 10) || 50));
     const offset = (page - 1) * pageSize;

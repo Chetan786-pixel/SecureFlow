@@ -53,7 +53,16 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 5
           resources:
+            {{- if and .Values.redis.resources .Values.redis.resources.limits .Values.redis.resources.requests }}
             {{- toYaml .Values.redis.resources | nindent 12 }}
+            {{- else }}
+            limits:
+              cpu: {{ default "500m" (dig "limits" "cpu" "500m" .Values.redis.resources) | quote }}
+              memory: {{ default "512Mi" (dig "limits" "memory" "512Mi" .Values.redis.resources) | quote }}
+            requests:
+              cpu: {{ default "100m" (dig "requests" "cpu" "100m" .Values.redis.resources) | quote }}
+              memory: {{ default "128Mi" (dig "requests" "memory" "128Mi" .Values.redis.resources) | quote }}
+            {{- end }}
           volumeMounts:
             - name: data
               mountPath: /data
