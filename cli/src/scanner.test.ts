@@ -478,9 +478,11 @@ describe("voice flag and audio player integration", () => {
   });
 
   it("detects CI environment to gracefully bypass audio playback", () => {
-    expect(isNonInteractiveCiEnvironment({ CI: "true" })).toBe(true);
-    expect(isNonInteractiveCiEnvironment({ GITHUB_ACTIONS: "true" })).toBe(true);
-    expect(isNonInteractiveCiEnvironment({ CI: "false", GITHUB_ACTIONS: undefined })).toBe(false);
+    expect(isNonInteractiveCiEnvironment({ NODE_ENV: "test", CI: "true" })).toBe(true);
+    expect(isNonInteractiveCiEnvironment({ NODE_ENV: "test", GITHUB_ACTIONS: "true" })).toBe(true);
+    expect(
+      isNonInteractiveCiEnvironment({ NODE_ENV: "test", CI: "false", GITHUB_ACTIONS: undefined }),
+    ).toBe(false);
   });
 
   it("resolves appropriate OS audio playback command per platform", () => {
@@ -490,7 +492,7 @@ describe("voice flag and audio player integration", () => {
   });
 
   it("bypasses audio playback in CI environment gracefully", () => {
-    const res = playAudioFile("test.mp3", { env: { CI: "true" } });
+    const res = playAudioFile("test.mp3", { env: { NODE_ENV: "test", CI: "true" } });
     expect(res.played).toBe(false);
     expect(res.bypassed).toBe(true);
   });

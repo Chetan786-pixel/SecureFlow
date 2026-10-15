@@ -17,17 +17,6 @@ export type PatchOutput = z.infer<typeof PatchOutputSchema>;
 
 /**
  * Generate a unified diff patch that fixes a security vulnerability.
- *
- * Previously this was wrapped in `ai.defineFlow(...)` using the Groq singleton
- * `ai`, but the handler inside called `getAiInstance().generate(...)` which
- * returns a *different* Genkit instance when LOCAL_AI_URL is set. The flow
- * registry and the execution instance were mismatched, causing a Genkit
- * registry error at runtime in local model mode.
- *
- * The fix follows the same pattern as `developerReceivesAISecurityExplanations`:
- * a plain async function that resolves the active instance and model at call
- * time via `getAiInstance()` and `getDefaultModelRef()`. No `defineFlow`
- * wrapper is needed — the function is called directly by its callers.
  */
 export async function generateRemediationPatch(input: PatchInput): Promise<PatchOutput> {
   const validatedInput = PatchInputSchema.parse(input);
@@ -37,10 +26,14 @@ export async function generateRemediationPatch(input: PatchInput): Promise<Patch
 
   let threatIntelContext = "";
   try {
-    const { queryLiveThreatIntelligence } = await import("../../../cli/src/mcp/index.js");
-    threatIntelContext = await queryLiveThreatIntelligence(
-      `${validatedInput.findingDescription} ${validatedInput.filePath}`,
-    );
+    const mcpModule = (await import("../../../cli/src/mcp")) as {
+      queryLiveThreatIntelligence?: (query: string) => Promise<string>;
+    };
+    if (typeof mcpModule.queryLiveThreatIntelligence === "function") {
+      threatIntelContext = await mcpModule.queryLiveThreatIntelligence(
+        `${validatedInput.findingDescription} ${validatedInput.filePath}`,
+      );
+    }
   } catch {
     // Graceful degradation if MCP server module cannot be loaded
   }
@@ -62,7 +55,7 @@ Provide ONLY the unified diff patch that fixes this issue securely. Do not inclu
 
   try {
     const { output } = await activeAi.generate({
-      model: activeModel as any,
+      model: activeModel as Awaited<Parameters<typeof activeAi.generate>[0]>["model"],
       prompt,
       output: { schema: PatchOutputSchema, format: "json" },
     });
@@ -83,11 +76,5 @@ Provide ONLY the unified diff patch that fixes this issue securely. Do not inclu
 
 /**
  * @deprecated Use `generateRemediationPatch` directly.
- *
- * Kept as a re-export so any existing callers that imported
- * `generateRemediationPatchFlow` continue to compile without changes.
- * The underlying implementation is now a plain async function — the
- * `ai.defineFlow` wrapper has been removed to fix the Genkit instance
- * mismatch when LOCAL_AI_URL is set.
  */
 export const generateRemediationPatchFlow = generateRemediationPatch;
