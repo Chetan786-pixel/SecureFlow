@@ -16,8 +16,14 @@ export const SAFE_MOCK_GROQ_API_KEY = "gsk_mock_test_token_never_expose";
 export function assertSafeMockCredentials(apiKey?: string): boolean {
   if (!apiKey) return true;
   // Disallow real/live looking production keys that lack mock/test designations
-  if (apiKey.startsWith("gsk_") && !apiKey.toLowerCase().includes("mock") && !apiKey.toLowerCase().includes("test")) {
-    throw new Error("[SECURITY AUDIT #1303] Potentially live or sensitive Groq API key detected in mock suite!");
+  if (
+    apiKey.startsWith("gsk_") &&
+    !apiKey.toLowerCase().includes("mock") &&
+    !apiKey.toLowerCase().includes("test")
+  ) {
+    throw new Error(
+      "[SECURITY AUDIT #1303] Potentially live or sensitive Groq API key detected in mock suite!",
+    );
   }
   return true;
 }
