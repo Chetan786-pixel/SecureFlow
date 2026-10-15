@@ -18,7 +18,7 @@
 # ----------------------------------------------------------------------------
 # 1. deps — install node_modules (cached unless package*.json changes)
 # ----------------------------------------------------------------------------
-FROM node:22-alpine AS deps
+FROM node:22-alpine@sha256:d2166de198f26e17e5a442f537754dd616ab069c47cc57b889310a717e0abbf9 AS deps
 RUN apk update && apk upgrade --no-cache && apk add --no-cache libc6-compat
 WORKDIR /app
 
@@ -37,7 +37,7 @@ RUN --mount=type=cache,target=/root/.npm npm ci --legacy-peer-deps
 # ----------------------------------------------------------------------------
 # 2. builder — compile the Next.js app and emit the standalone bundle
 # ----------------------------------------------------------------------------
-FROM node:22-alpine AS builder
+FROM node:22-alpine@sha256:d2166de198f26e17e5a442f537754dd616ab069c47cc57b889310a717e0abbf9 AS builder
 RUN apk update && apk upgrade --no-cache && apk add --no-cache libc6-compat
 WORKDIR /app
 
@@ -75,7 +75,7 @@ RUN --mount=type=cache,target=/root/.npm npx prisma generate && npx next build
 # stays exactly what Next's output tracing produced, and so this layer
 # is cached independently of app source changes.
 # ----------------------------------------------------------------------------
-FROM node:22-alpine AS prisma-cli
+FROM node:22-alpine@sha256:d2166de198f26e17e5a442f537754dd616ab069c47cc57b889310a717e0abbf9 AS prisma-cli
 RUN apk update && apk upgrade --no-cache
 WORKDIR /opt/prisma-cli
 RUN --mount=type=cache,target=/root/.npm npm init -y \
@@ -86,7 +86,7 @@ RUN --mount=type=cache,target=/root/.npm npm init -y \
 # ----------------------------------------------------------------------------
 # 4. runner — minimal runtime image
 # ----------------------------------------------------------------------------
-FROM node:22-alpine AS runner
+FROM node:22-alpine@sha256:d2166de198f26e17e5a442f537754dd616ab069c47cc57b889310a717e0abbf9 AS runner
 RUN apk update && apk upgrade --no-cache
 WORKDIR /app
 
