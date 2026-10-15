@@ -10,19 +10,35 @@ import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 import { generateRemediationPatchFlow } from "@/ai/flows/generate-remediation-patch";
 import { MAX_PAGE_SIZE } from "@/lib/findings/query";
-import { withErrorHandler, AppError } from "@/lib/middleware/error-handler";
+import { withErrorHandler } from "@/lib/middleware/error-handler";
 
-/**
- * Most findings one request may remediate.
- *
- * Every finding is a separate AI call, all started at once, while the rate limit
- * counts the request once. The dashboard can only select findings on the current
- * page, so a page is the ceiling a real caller reaches.
- */
 const MAX_BULK_REMEDIATION_FINDINGS = MAX_PAGE_SIZE;
 
 /** Maximum allowed payload size for bulk remediation requests (128 KB). */
 export const MAX_BULK_REQUEST_BYTES = 128 * 1024;
+
+interface BulkFindingRecord {
+  id: string;
+  type: string;
+  fileLocation: string;
+  codeSnippet?: string | null;
+  explanation?: string | null;
+  remediation?: string | null;
+}
+
+interface RemediationPatchDelegate {
+  remediationPatch: {
+    updateMany: (args: {
+      where: { findingId: { in: string[] } };
+      data: { status: string };
+    }) => Promise<unknown>;
+    upsert: (args: {
+      where: { findingId: string };
+      update: { patchDiff: string; status: string };
+      create: { findingId: string; patchDiff: string; status: string };
+    }) => Promise<unknown>;
+  };
+}
 
 /* POST /api/findings/bulk-remediate */
 const handler = async function POST(req: NextRequest) {
@@ -105,9 +121,6 @@ const handler = async function POST(req: NextRequest) {
       );
     }
 
-    // A repeated id is one finding. `findMany` returns each row once, so
-    // comparing its length against the raw array answered 403 "access is
-    // denied" for a request that only named the same finding twice.
     const uniqueIds = Array.from(new Set(findingIds as string[]));
 
     if (uniqueIds.length > MAX_BULK_REMEDIATION_FINDINGS) {
@@ -118,7 +131,7 @@ const handler = async function POST(req: NextRequest) {
     }
 
     // Load findings owned by the authenticated user to verify authorization
-    const findings: any[] = await prisma.finding.findMany({
+    const findings = (await prisma.finding.findMany({
       where: {
         id: { in: uniqueIds },
         scanResult: { pullRequest: { repository: { userId } } },
@@ -132,7 +145,7 @@ const handler = async function POST(req: NextRequest) {
           },
         },
       },
-    });
+    })) as unknown as BulkFindingRecord[];
 
     if (findings.length === 0) {
       return NextResponse.json({ error: "No matching findings found" }, { status: 404 });
@@ -150,14 +163,15 @@ const handler = async function POST(req: NextRequest) {
       const newStatus = action === "rollback" ? "PENDING" : "APPLIED";
 
       if (typeof prisma.$transaction === "function") {
-        await prisma.$transaction(async (tx: any) => {
-          await tx.remediationPatch.updateMany({
+        await prisma.$transaction(async (tx: unknown) => {
+          const client = tx as RemediationPatchDelegate;
+          await client.remediationPatch.updateMany({
             where: { findingId: { in: uniqueIds } },
             data: { status: newStatus },
           });
         });
       } else {
-        await prisma.remediationPatch.updateMany({
+        await (prisma as unknown as RemediationPatchDelegate).remediationPatch.updateMany({
           where: { findingId: { in: uniqueIds } },
           data: { status: newStatus },
         });
@@ -171,8 +185,7 @@ const handler = async function POST(req: NextRequest) {
     }
 
     // Process Generate action (Default AI Flow)
-    // Enforce type homogeneity: bulk remediation requires findings of the same vulnerability type
-    const types = Array.from(new Set(findings.map((f: any) => f.type)));
+    const types = Array.from(new Set(findings.map((f) => f.type)));
     if (types.length > 1) {
       return NextResponse.json(
         {
@@ -213,17 +226,16 @@ const handler = async function POST(req: NextRequest) {
           patchDiff: aiResult.patchDiff,
           explanation: aiResult.explanation,
         });
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : "AI patch generation failed";
         failedItems.push({
           findingId: finding.id,
-          error: err?.message || "AI patch generation failed",
+          error: errorMessage,
         });
-        // Abort on failure to guarantee strict atomicity and safe rollback
         break;
       }
     }
 
-    // If any item failed generation, abort the entire transaction safely without writing to DB
     if (failedItems.length > 0) {
       return NextResponse.json(
         {
@@ -236,9 +248,10 @@ const handler = async function POST(req: NextRequest) {
       );
     }
 
-    // 2. All external data collected successfully. Execute database mutations atomically inside prisma.$transaction.
-    const savePatches = async (client: any) => {
-      const patches: any[] = [];
+    // 2. Execute database mutations atomically inside prisma.$transaction
+    const savePatches = async (txClient: unknown) => {
+      const client = txClient as RemediationPatchDelegate;
+      const patches: unknown[] = [];
       for (const item of generatedResults) {
         const patch = await client.remediationPatch.upsert({
           where: { findingId: item.findingId },
@@ -254,7 +267,6 @@ const handler = async function POST(req: NextRequest) {
       ? prisma.$transaction(savePatches)
       : savePatches(prisma));
 
-    // Combine individual diffs into a unified multi-file diff
     const combinedDiff = generatedResults.map((r) => r.patchDiff).join("\n\n");
     const combinedExplanation =
       `Bulk remediation patch for ${findings.length} ${types[0]} findings across repository:\n` +
