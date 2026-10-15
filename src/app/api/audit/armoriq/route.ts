@@ -68,10 +68,7 @@ async function getHandler(request: NextRequest) {
         { status: 503 },
       );
     }
-    return NextResponse.json(
-      { error: "Failed to retrieve ArmorIQ audit traces" },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "Failed to retrieve ArmorIQ audit traces" }, { status: 500 });
   }
 }
 
@@ -107,12 +104,7 @@ async function postHandler(request: NextRequest) {
       frameworks,
     } = body;
 
-    if (
-      !agentId ||
-      !toolName ||
-      !decision ||
-      !["ALLOW", "BLOCK", "HOLD"].includes(decision)
-    ) {
+    if (!agentId || !toolName || !decision || !["ALLOW", "BLOCK", "HOLD"].includes(decision)) {
       return NextResponse.json(
         { error: "agentId, toolName, and decision ('ALLOW' | 'BLOCK' | 'HOLD') are required." },
         { status: 400 },

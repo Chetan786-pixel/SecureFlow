@@ -28,8 +28,8 @@ describe("scripts/sync-threat-feed.ts (#1330)", () => {
       sourcesSynced: ["Source 1"],
       errors: [],
       categoryCounts: {
-        "ROLE_PLAY_JAILBREAK": 3,
-        "PROMPT_LEAKAGE": 2,
+        ROLE_PLAY_JAILBREAK: 3,
+        PROMPT_LEAKAGE: 2,
       },
     });
   });
@@ -68,7 +68,13 @@ describe("scripts/sync-threat-feed.ts (#1330)", () => {
 
   it("handles custom output path passed via --out", async () => {
     const originalArgv = process.argv;
-    process.argv = ["node", "scripts/sync-threat-feed.ts", "--out", "custom-output.json", "--quiet"];
+    process.argv = [
+      "node",
+      "scripts/sync-threat-feed.ts",
+      "--out",
+      "custom-output.json",
+      "--quiet",
+    ];
 
     const exitCode = await syncThreatFeedMain();
     expect(exitCode).toBe(0);

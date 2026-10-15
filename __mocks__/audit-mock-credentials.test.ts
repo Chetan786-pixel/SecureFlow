@@ -73,9 +73,8 @@ describe("Mock Data Credentials Security Audit (#1303)", () => {
 
   describe("armoriq mock audit", () => {
     it("provides safe synthetic mock tokens without live credentials", async () => {
-      const { ArmorIQClient, SAFE_MOCK_ARMORIQ_API_KEY, SAFE_MOCK_INTENT_TOKEN } = await import(
-        "./@armoriq/sdk"
-      );
+      const { ArmorIQClient, SAFE_MOCK_ARMORIQ_API_KEY, SAFE_MOCK_INTENT_TOKEN } =
+        await import("./@armoriq/sdk");
       expect(SAFE_MOCK_ARMORIQ_API_KEY).toContain("mock");
       expect(SAFE_MOCK_INTENT_TOKEN).toContain("mock");
       const client = new ArmorIQClient();

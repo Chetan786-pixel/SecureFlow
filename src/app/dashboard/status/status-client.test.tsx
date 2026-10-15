@@ -3,7 +3,6 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import React from "react";
 import StatusClient from "./status-client";
 import type { ComponentHealth } from "@/lib/health-check";
 
@@ -34,7 +33,7 @@ describe("StatusClient component (#1333)", () => {
       />,
     );
 
-    expect(screen.getByText(/HEALTHY/i)).toBeDefined();
+    expect(screen.getAllByText(/HEALTHY/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/All systems operational/i)).toBeDefined();
     expect(screen.getByText("PostgreSQL")).toBeDefined();
     expect(screen.getByText("Redis")).toBeDefined();
@@ -65,7 +64,7 @@ describe("StatusClient component (#1333)", () => {
       />,
     );
 
-    expect(screen.getByText(/DEGRADED/i)).toBeDefined();
+    expect(screen.getAllByText(/DEGRADED/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/All systems partially operational/i)).toBeDefined();
     expect(screen.getByText("High memory fragmentation")).toBeDefined();
     expect(screen.getByText("350ms")).toBeDefined();
@@ -91,7 +90,7 @@ describe("StatusClient component (#1333)", () => {
       />,
     );
 
-    expect(screen.getByText(/DOWN/i)).toBeDefined();
+    expect(screen.getAllByText(/DOWN/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/All systems experiencing issues/i)).toBeDefined();
     expect(screen.getByText("Connection refused on port 5432")).toBeDefined();
   });

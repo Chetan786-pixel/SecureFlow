@@ -31,7 +31,9 @@ describe("SettingsClient component (#1333)", () => {
   it("renders with initial webhook URL", () => {
     render(<SettingsClient initialWebhookUrl="https://hooks.slack.com/services/initial" />);
 
-    const input = screen.getByPlaceholderText("https://hooks.slack.com/services/...") as HTMLInputElement;
+    const input = screen.getByPlaceholderText(
+      "https://hooks.slack.com/services/...",
+    ) as HTMLInputElement;
     expect(input.value).toBe("https://hooks.slack.com/services/initial");
     expect(screen.getByRole("button", { name: /Save Settings/i })).toBeDefined();
   });
@@ -39,14 +41,18 @@ describe("SettingsClient component (#1333)", () => {
   it("renders with empty input when initialWebhookUrl is null", () => {
     render(<SettingsClient initialWebhookUrl={null} />);
 
-    const input = screen.getByPlaceholderText("https://hooks.slack.com/services/...") as HTMLInputElement;
+    const input = screen.getByPlaceholderText(
+      "https://hooks.slack.com/services/...",
+    ) as HTMLInputElement;
     expect(input.value).toBe("");
   });
 
   it("updates form input state when user types", () => {
     render(<SettingsClient initialWebhookUrl="" />);
 
-    const input = screen.getByPlaceholderText("https://hooks.slack.com/services/...") as HTMLInputElement;
+    const input = screen.getByPlaceholderText(
+      "https://hooks.slack.com/services/...",
+    ) as HTMLInputElement;
     fireEvent.change(input, {
       target: { value: "https://hooks.slack.com/services/T00/B00/XXXXX" },
     });
@@ -68,7 +74,9 @@ describe("SettingsClient component (#1333)", () => {
     fireEvent.click(saveButton);
 
     await waitFor(() => {
-      expect(updateSlackWebhookMock).toHaveBeenCalledWith("https://hooks.slack.com/services/new-url");
+      expect(updateSlackWebhookMock).toHaveBeenCalledWith(
+        "https://hooks.slack.com/services/new-url",
+      );
       expect(toastSuccessMock).toHaveBeenCalledWith("Settings saved successfully.");
     });
   });

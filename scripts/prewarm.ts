@@ -3,14 +3,18 @@ import dotenv from "dotenv";
 
 dotenv.config({ path: ".env" });
 
-export async function prewarm(options: {
-  url?: string;
-  maxRetries?: number;
-  initialBackoffMs?: number;
-} = {}) {
+export async function prewarm(
+  options: {
+    url?: string;
+    maxRetries?: number;
+    initialBackoffMs?: number;
+  } = {},
+) {
   console.log("🔥 Pre-warming GitHub webhook route...");
 
-  const url = options.url || `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:9002"}/api/webhooks/github`;
+  const url =
+    options.url ||
+    `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:9002"}/api/webhooks/github`;
   const maxRetries = options.maxRetries ?? 5;
   const initialBackoffMs = options.initialBackoffMs ?? 2000;
   let retries = maxRetries;

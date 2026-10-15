@@ -109,55 +109,63 @@ export const mockVerifyIntentToken = vi.fn().mockImplementation(async (token: st
   };
 });
 
-export const mockSignIntent = vi.fn().mockImplementation(async (intent: Record<string, unknown>) => {
-  if (mockArmorIQState.shouldTimeout) {
-    throw new ArmorIQTimeoutError();
-  }
-  if (mockArmorIQState.shouldFailUnreachable) {
-    throw new ArmorIQUnreachableError();
-  }
-  return {
-    signed: true,
-    intentId: "intent_mock_12345",
-    signature: "mock_signature_hash_67890",
-    intent,
-  };
-});
+export const mockSignIntent = vi
+  .fn()
+  .mockImplementation(async (intent: Record<string, unknown>) => {
+    if (mockArmorIQState.shouldTimeout) {
+      throw new ArmorIQTimeoutError();
+    }
+    if (mockArmorIQState.shouldFailUnreachable) {
+      throw new ArmorIQUnreachableError();
+    }
+    return {
+      signed: true,
+      intentId: "intent_mock_12345",
+      signature: "mock_signature_hash_67890",
+      intent,
+    };
+  });
 
-export const mockEvaluatePolicy = vi.fn().mockImplementation(async (context: Record<string, unknown>) => {
-  if (mockArmorIQState.shouldTimeout) {
-    throw new ArmorIQTimeoutError();
-  }
-  if (mockArmorIQState.shouldFailUnreachable) {
-    throw new ArmorIQUnreachableError();
-  }
-  return {
-    decision: mockArmorIQState.decision,
-    ruleMatched: mockArmorIQState.ruleMatched,
-    justification: mockArmorIQState.justification,
-    context,
-  };
-});
+export const mockEvaluatePolicy = vi
+  .fn()
+  .mockImplementation(async (context: Record<string, unknown>) => {
+    if (mockArmorIQState.shouldTimeout) {
+      throw new ArmorIQTimeoutError();
+    }
+    if (mockArmorIQState.shouldFailUnreachable) {
+      throw new ArmorIQUnreachableError();
+    }
+    return {
+      decision: mockArmorIQState.decision,
+      ruleMatched: mockArmorIQState.ruleMatched,
+      justification: mockArmorIQState.justification,
+      context,
+    };
+  });
 
-export const mockValidateProof = vi.fn().mockImplementation((proofHash: string, signature: string) => {
-  if (!proofHash || !signature) return false;
-  return mockArmorIQState.validProof && mockArmorIQState.validSignature;
-});
+export const mockValidateProof = vi
+  .fn()
+  .mockImplementation((proofHash: string, signature: string) => {
+    if (!proofHash || !signature) return false;
+    return mockArmorIQState.validProof && mockArmorIQState.validSignature;
+  });
 
-export const mockRecordAuditLog = vi.fn().mockImplementation(async (payload: Record<string, unknown>) => {
-  if (mockArmorIQState.shouldTimeout) {
-    throw new ArmorIQTimeoutError();
-  }
-  if (mockArmorIQState.shouldFailUnreachable) {
-    throw new ArmorIQUnreachableError();
-  }
-  return {
-    id: `armoriq_log_${Date.now()}`,
-    status: "RECORDED",
-    timestamp: new Date().toISOString(),
-    ...payload,
-  };
-});
+export const mockRecordAuditLog = vi
+  .fn()
+  .mockImplementation(async (payload: Record<string, unknown>) => {
+    if (mockArmorIQState.shouldTimeout) {
+      throw new ArmorIQTimeoutError();
+    }
+    if (mockArmorIQState.shouldFailUnreachable) {
+      throw new ArmorIQUnreachableError();
+    }
+    return {
+      id: `armoriq_log_${Date.now()}`,
+      status: "RECORDED",
+      timestamp: new Date().toISOString(),
+      ...payload,
+    };
+  });
 
 export class ArmorIQClient {
   public apiKey: string;
