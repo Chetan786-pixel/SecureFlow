@@ -38,5 +38,14 @@ spec:
             - secretRef:
                 name: {{ include "secureflow.secretName" . }}
           resources:
+            {{- if and .Values.migration.resources .Values.migration.resources.limits .Values.migration.resources.requests }}
             {{- toYaml .Values.migration.resources | nindent 12 }}
+            {{- else }}
+            limits:
+              cpu: {{ default "500m" (dig "limits" "cpu" "500m" .Values.migration.resources) | quote }}
+              memory: {{ default "512Mi" (dig "limits" "memory" "512Mi" .Values.migration.resources) | quote }}
+            requests:
+              cpu: {{ default "100m" (dig "requests" "cpu" "100m" .Values.migration.resources) | quote }}
+              memory: {{ default "256Mi" (dig "requests" "memory" "256Mi" .Values.migration.resources) | quote }}
+            {{- end }}
 {{- end }}
