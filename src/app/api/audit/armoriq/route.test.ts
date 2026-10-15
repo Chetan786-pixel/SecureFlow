@@ -5,12 +5,7 @@ import {
   ArmorIQUnreachableError,
 } from "../../../../../__mocks__/@armoriq/sdk";
 
-const {
-  authMock,
-  fetchTracesMock,
-  recordAuditLogMock,
-  buildReportMock,
-} = vi.hoisted(() => ({
+const { authMock, fetchTracesMock, recordAuditLogMock, buildReportMock } = vi.hoisted(() => ({
   authMock: vi.fn(),
   fetchTracesMock: vi.fn(),
   recordAuditLogMock: vi.fn(),
@@ -76,7 +71,9 @@ describe("GET /api/audit/armoriq", () => {
     ];
     fetchTracesMock.mockResolvedValueOnce({ traces: mockTraces, total: 1 });
 
-    const req = new NextRequest("http://localhost:3000/api/audit/armoriq?scanJobId=job-1&decision=ALLOW");
+    const req = new NextRequest(
+      "http://localhost:3000/api/audit/armoriq?scanJobId=job-1&decision=ALLOW",
+    );
     const res = await GET(req);
 
     expect(res.status).toBe(200);

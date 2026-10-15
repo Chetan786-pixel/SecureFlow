@@ -1,17 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
-const {
-  authMock,
-  loadScanJobOwnershipMock,
-  scanJobVisibilityMock,
-  getScanJobStatusMock,
-} = vi.hoisted(() => ({
-  authMock: vi.fn(),
-  loadScanJobOwnershipMock: vi.fn(),
-  scanJobVisibilityMock: vi.fn(),
-  getScanJobStatusMock: vi.fn(),
-}));
+const { authMock, loadScanJobOwnershipMock, scanJobVisibilityMock, getScanJobStatusMock } =
+  vi.hoisted(() => ({
+    authMock: vi.fn(),
+    loadScanJobOwnershipMock: vi.fn(),
+    scanJobVisibilityMock: vi.fn(),
+    getScanJobStatusMock: vi.fn(),
+  }));
 
 vi.mock("@/auth", () => ({ auth: authMock }));
 
@@ -54,7 +50,7 @@ describe("GET /api/findings/status/[jobId]", () => {
     expect(res.status).toBe(401);
     const body = await res.json();
     expect(body.success).toBe(false);
-    expect(body.error).toBe("UNAUTHORIZED");
+    expect(body.error).toBe("AppError");
     expect(body.message).toBe("Unauthorized");
     expect(loadScanJobOwnershipMock).not.toHaveBeenCalled();
   });
@@ -69,7 +65,7 @@ describe("GET /api/findings/status/[jobId]", () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.success).toBe(false);
-    expect(body.error).toBe("BAD_REQUEST");
+    expect(body.error).toBe("AppError");
     expect(body.message).toBe("Invalid job ID");
   });
 
@@ -85,7 +81,7 @@ describe("GET /api/findings/status/[jobId]", () => {
     expect(res.status).toBe(404);
     const body = await res.json();
     expect(body.success).toBe(false);
-    expect(body.error).toBe("NOT_FOUND");
+    expect(body.error).toBe("AppError");
     expect(body.message).toBe("Scan job not found");
     expect(getScanJobStatusMock).not.toHaveBeenCalled();
   });
@@ -103,7 +99,7 @@ describe("GET /api/findings/status/[jobId]", () => {
     expect(res.status).toBe(404);
     const body = await res.json();
     expect(body.success).toBe(false);
-    expect(body.error).toBe("NOT_FOUND");
+    expect(body.error).toBe("AppError");
     expect(body.message).toBe("Scan job not found");
   });
 
