@@ -388,9 +388,17 @@ externalSecrets:
     kind: "SecretStore" # SecretStore or ClusterSecretStore
   target:
     creationPolicy: "Owner"
-  # Fetch specific secret keys from external provider
+  # Fetch specific secret keys from external provider (no plaintext fallbacks)
   data: []
   # Example:
+  # - secretKey: DATABASE_URL
+  #   remoteRef:
+  #     key: secureflow/production
+  #     property: database_url
+  # - secretKey: REDIS_URL
+  #   remoteRef:
+  #     key: secureflow/production
+  #     property: redis_url
   # - secretKey: AUTH_SECRET
   #   remoteRef:
   #     key: secureflow/production
@@ -413,9 +421,11 @@ externalSecrets:
 sealedSecrets:
   enabled: false
   annotations: {}
-  # Map of encrypted secret tokens generated via `kubeseal`
+  # Map of encrypted secret tokens generated via `kubeseal` (no plaintext fallbacks)
   encryptedData: {}
   # Example:
+  #   DATABASE_URL: AgBy3...
+  #   REDIS_URL: AgBy3...
   #   AUTH_SECRET: AgBy3...
   #   GROQ_API_KEY: AgBy3...
 
