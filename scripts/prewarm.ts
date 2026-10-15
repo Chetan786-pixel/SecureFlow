@@ -3,11 +3,16 @@ import dotenv from "dotenv";
 
 dotenv.config({ path: ".env" });
 
-async function prewarm() {
+export async function prewarm(options: {
+  url?: string;
+  maxRetries?: number;
+  initialBackoffMs?: number;
+} = {}) {
   console.log("🔥 Pre-warming GitHub webhook route...");
 
-  const url = `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/github`;
-  const maxRetries = 5;
+  const url = options.url || `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:9002"}/api/webhooks/github`;
+  const maxRetries = options.maxRetries ?? 5;
+  const initialBackoffMs = options.initialBackoffMs ?? 2000;
   let retries = maxRetries;
 
   while (retries > 0) {
@@ -33,7 +38,7 @@ async function prewarm() {
       // We also accept 200/202 just in case the auth logic changes later
       if (res.status === 401 || res.ok) {
         console.log(`✅ Route compiled and pre-warmed successfully! (Status: ${res.status})`);
-        return; // Exit successfully
+        return true; // Exit successfully
       } else {
         console.warn(`⚠️ Server responded with status ${res.status}. Retrying...`);
       }
@@ -54,13 +59,21 @@ async function prewarm() {
       console.error(
         "❌ Pre-warming failed after maximum retries. Ensure the server is running on port 9002.",
       );
-      process.exit(1);
+      if (process.env.NODE_ENV !== "test") {
+        process.exit(1);
+      }
+      return false;
     }
 
     // Progressive backoff: 2s, then 4s, then 6s...
-    const backoffTime = (maxRetries - retries) * 2000;
+    const backoffTime = (maxRetries - retries) * initialBackoffMs;
     await new Promise((resolve) => setTimeout(resolve, backoffTime));
   }
+
+  return false;
 }
 
-prewarm();
+const isMain = process.argv[1] && /prewarm(\.ts|\.js)?$/.test(process.argv[1]);
+if (isMain) {
+  prewarm();
+}

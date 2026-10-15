@@ -90,11 +90,14 @@ export function parseArgs(argv: string[]): PurgeOptions & { help: boolean } {
   return options;
 }
 
-async function main(): Promise<number> {
+export async function runRetentionCli(
+  argv: string[] = process.argv.slice(2),
+  prismaClient = prisma,
+): Promise<number> {
   let options: PurgeOptions & { help: boolean };
 
   try {
-    options = parseArgs(process.argv.slice(2));
+    options = parseArgs(argv);
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     return 2;
@@ -106,7 +109,7 @@ async function main(): Promise<number> {
   }
 
   try {
-    const report = await runRetention(prisma as never, options);
+    const report = await runRetention(prismaClient as never, options);
     console.log(formatReport(report));
 
     if (report.dryRun && report.totalAffected > 0) {
@@ -127,11 +130,14 @@ async function main(): Promise<number> {
   }
 }
 
-main()
-  .then((code) => {
-    process.exitCode = code;
-  })
-  .catch((error) => {
-    console.error(error);
-    process.exitCode = 1;
-  });
+const isMain = process.argv[1] && /retention(\.ts|\.js)?$/.test(process.argv[1]);
+if (isMain) {
+  runRetentionCli()
+    .then((code) => {
+      process.exitCode = code;
+    })
+    .catch((error) => {
+      console.error(error);
+      process.exitCode = 1;
+    });
+}
