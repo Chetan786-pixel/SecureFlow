@@ -21,34 +21,58 @@ async function getHandler(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { searchParams } = new URL(request.url);
-  const scanJobId = searchParams.get("scanJobId") || undefined;
-  const findingId = searchParams.get("findingId") || undefined;
-  const decision = searchParams.get("decision") || undefined;
-  const format = searchParams.get("format") || undefined;
-  const framework = (searchParams.get("framework") as "SOC2" | "ISO27001" | "ALL") || "ALL";
-
-  const { traces, total } = await fetchArmorIQAuditTraces({
-    scanJobId,
-    findingId,
-    decision,
-    limit: 100,
-  });
-
-  if (format === "compliance") {
-    const report = buildComplianceReport(traces, framework);
-    return NextResponse.json({
-      framework,
-      generatedAt: new Date().toISOString(),
-      totalRecords: total,
-      evidence: report,
-    });
+  if ((session.user as any)?.role === "SUSPENDED" || (session.user as any)?.forbidden) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  return NextResponse.json({
-    traces,
-    total,
-  });
+  try {
+    const { searchParams } = new URL(request.url);
+    const scanJobId = searchParams.get("scanJobId") || undefined;
+    const findingId = searchParams.get("findingId") || undefined;
+    const decision = searchParams.get("decision") || undefined;
+    const format = searchParams.get("format") || undefined;
+    const framework = (searchParams.get("framework") as "SOC2" | "ISO27001" | "ALL") || "ALL";
+
+    const { traces, total } = await fetchArmorIQAuditTraces({
+      scanJobId,
+      findingId,
+      decision,
+      limit: 100,
+    });
+
+    if (format === "compliance") {
+      const report = buildComplianceReport(traces, framework);
+      return NextResponse.json({
+        framework,
+        generatedAt: new Date().toISOString(),
+        totalRecords: total,
+        evidence: report,
+      });
+    }
+
+    return NextResponse.json({
+      traces,
+      total,
+    });
+  } catch (error: any) {
+    if (
+      error?.status === 503 ||
+      error?.status === 504 ||
+      error?.name === "ArmorIQTimeoutError" ||
+      error?.name === "ArmorIQUnreachableError" ||
+      error?.code === "ETIMEDOUT" ||
+      error?.code === "ENOTFOUND"
+    ) {
+      return NextResponse.json(
+        { error: "Upstream ArmorIQ audit service is temporarily unavailable" },
+        { status: 503 },
+      );
+    }
+    return NextResponse.json(
+      { error: "Failed to retrieve ArmorIQ audit traces" },
+      { status: 500 },
+    );
+  }
 }
 
 /**
@@ -61,6 +85,10 @@ async function postHandler(request: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if ((session.user as any)?.role === "SUSPENDED" || (session.user as any)?.forbidden) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   try {
@@ -79,7 +107,12 @@ async function postHandler(request: NextRequest) {
       frameworks,
     } = body;
 
-    if (!agentId || !toolName || !decision) {
+    if (
+      !agentId ||
+      !toolName ||
+      !decision ||
+      !["ALLOW", "BLOCK", "HOLD"].includes(decision)
+    ) {
       return NextResponse.json(
         { error: "agentId, toolName, and decision ('ALLOW' | 'BLOCK' | 'HOLD') are required." },
         { status: 400 },
@@ -101,8 +134,36 @@ async function postHandler(request: NextRequest) {
       userId: session.user.id,
     });
 
-    return NextResponse.json({ success: true, log });
-  } catch (error) {
+    if (!log) {
+      return NextResponse.json(
+        { error: "Failed to record ArmorIQ enforcement audit log" },
+        { status: 500 },
+      );
+    }
+
+    return NextResponse.json({ success: true, log }, { status: 201 });
+  } catch (error: any) {
+    if (error?.status === 502 || error?.code === "BAD_GATEWAY") {
+      return NextResponse.json(
+        { error: "Upstream ArmorIQ service returned an invalid gateway response" },
+        { status: 502 },
+      );
+    }
+    if (
+      error?.status === 503 ||
+      error?.status === 504 ||
+      error?.name === "ArmorIQTimeoutError" ||
+      error?.name === "ArmorIQUnreachableError" ||
+      error?.code === "ETIMEDOUT" ||
+      error?.code === "ENOTFOUND" ||
+      error?.message?.toLowerCase().includes("timeout") ||
+      error?.message?.toLowerCase().includes("unreachable")
+    ) {
+      return NextResponse.json(
+        { error: "Upstream ArmorIQ verification service is temporarily unreachable" },
+        { status: 503 },
+      );
+    }
     return NextResponse.json(
       { error: "Failed to record ArmorIQ enforcement audit log" },
       { status: 500 },
