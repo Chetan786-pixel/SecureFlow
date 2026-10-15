@@ -16,7 +16,7 @@ This guide walks you through acquiring every credential required to run SecureFl
 3. Set in `.env`:
    ```env
    DATABASE_URL="postgresql://postgres:<your_password>@localhost:5432/secureflow"
-   DATABASE_POOL_URL=""   # leave empty for local dev
+   DATABASE_POOL_URL="postgresql://postgres:<your_password>@localhost:5432/secureflow"   # same as DATABASE_URL for local dev
    DB_POOL_MAX=10
    ```
 
