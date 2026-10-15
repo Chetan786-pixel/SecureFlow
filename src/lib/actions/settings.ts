@@ -42,3 +42,34 @@ export async function getSlackWebhook() {
 
   return user?.slackWebhookUrl || null;
 }
+
+export async function updateVoiceAlerts(enabled: boolean): Promise<{ success: boolean }> {
+  const session = await auth();
+  const userId = session?.user?.id;
+
+  if (!userId) {
+    throw new Error("Unauthorized");
+  }
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { voiceAlertsEnabled: Boolean(enabled) },
+  });
+
+  revalidatePath("/dashboard/settings");
+  return { success: true };
+}
+
+export async function getVoiceAlerts(): Promise<boolean> {
+  const session = await auth();
+  const userId = session?.user?.id;
+
+  if (!userId) return false;
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { voiceAlertsEnabled: true },
+  });
+
+  return user?.voiceAlertsEnabled ?? false;
+}
