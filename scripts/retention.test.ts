@@ -9,10 +9,7 @@ import {
   retentionFor,
   RetentionConfigError,
 } from "../src/lib/retention/policy";
-import {
-  PROTECTED_TRIAGE_STATUSES,
-  REDACTED_SNIPPET,
-} from "../src/lib/retention/purge";
+import { PROTECTED_TRIAGE_STATUSES, REDACTED_SNIPPET } from "../src/lib/retention/purge";
 
 describe("scripts/retention.ts - CLI and Data Deletion Boundaries (#1330)", () => {
   describe("CLI Argument Parsing (parseArgs)", () => {
