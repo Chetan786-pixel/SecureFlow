@@ -29,7 +29,12 @@ describe("SettingsClient component (#1333)", () => {
   });
 
   it("renders with initial webhook URL", () => {
-    render(<SettingsClient initialWebhookUrl="https://hooks.slack.com/services/initial" />);
+    render(
+      <SettingsClient
+        initialWebhookUrl="https://hooks.slack.com/services/initial"
+        initialVoiceAlertsEnabled={false}
+      />,
+    );
 
     const input = screen.getByPlaceholderText(
       "https://hooks.slack.com/services/...",
@@ -39,7 +44,7 @@ describe("SettingsClient component (#1333)", () => {
   });
 
   it("renders with empty input when initialWebhookUrl is null", () => {
-    render(<SettingsClient initialWebhookUrl={null} />);
+    render(<SettingsClient initialWebhookUrl={null} initialVoiceAlertsEnabled={false} />);
 
     const input = screen.getByPlaceholderText(
       "https://hooks.slack.com/services/...",
@@ -48,7 +53,7 @@ describe("SettingsClient component (#1333)", () => {
   });
 
   it("updates form input state when user types", () => {
-    render(<SettingsClient initialWebhookUrl="" />);
+    render(<SettingsClient initialWebhookUrl="" initialVoiceAlertsEnabled={false} />);
 
     const input = screen.getByPlaceholderText(
       "https://hooks.slack.com/services/...",
@@ -63,7 +68,7 @@ describe("SettingsClient component (#1333)", () => {
   it("submits updated webhook URL and displays success toast", async () => {
     updateSlackWebhookMock.mockResolvedValueOnce({ success: true });
 
-    render(<SettingsClient initialWebhookUrl="" />);
+    render(<SettingsClient initialWebhookUrl="" initialVoiceAlertsEnabled={false} />);
 
     const input = screen.getByPlaceholderText("https://hooks.slack.com/services/...");
     fireEvent.change(input, {
@@ -84,7 +89,12 @@ describe("SettingsClient component (#1333)", () => {
   it("displays error toast when update action fails", async () => {
     updateSlackWebhookMock.mockRejectedValueOnce(new Error("Invalid webhook URL format"));
 
-    render(<SettingsClient initialWebhookUrl="https://hooks.slack.com/services/old" />);
+    render(
+      <SettingsClient
+        initialWebhookUrl="https://hooks.slack.com/services/old"
+        initialVoiceAlertsEnabled={false}
+      />,
+    );
 
     const saveButton = screen.getByRole("button", { name: /Save Settings/i });
     fireEvent.click(saveButton);
