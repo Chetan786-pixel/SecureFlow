@@ -4,12 +4,12 @@ import MockGroq, {
   assertSafeMockCredentials,
   mockCreate,
   mockStream,
-} from "./groq-sdk";
-import NextAuth, { SAFE_MOCK_SESSION } from "./next-auth";
-import githubProvider from "./next-auth/providers/github";
-import { auth, SAFE_MOCK_AUTH_SESSION } from "./auth";
+} from "../__mocks__/groq-sdk";
+import NextAuth, { SAFE_MOCK_SESSION } from "../__mocks__/next-auth";
+import githubProvider from "../__mocks__/next-auth/providers/github";
+import { auth, SAFE_MOCK_AUTH_SESSION } from "../__mocks__/auth";
 
-describe("Mock Data Credentials Security Audit (#1303)", () => {
+describe("Mock Data Credentials Security Audit (#1303, #1354)", () => {
   describe("groq-sdk mock audit", () => {
     it("provides safe synthetic mock API key without real secrets", () => {
       expect(SAFE_MOCK_GROQ_API_KEY).toContain("mock");
@@ -74,7 +74,7 @@ describe("Mock Data Credentials Security Audit (#1303)", () => {
   describe("armoriq mock audit", () => {
     it("provides safe synthetic mock tokens without live credentials", async () => {
       const { ArmorIQClient, SAFE_MOCK_ARMORIQ_API_KEY, SAFE_MOCK_INTENT_TOKEN } =
-        await import("./@armoriq/sdk");
+        await import("../__mocks__/@armoriq/sdk");
       expect(SAFE_MOCK_ARMORIQ_API_KEY).toContain("mock");
       expect(SAFE_MOCK_INTENT_TOKEN).toContain("mock");
       const client = new ArmorIQClient();
