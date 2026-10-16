@@ -12,7 +12,6 @@ import {
 import {
   PROTECTED_TRIAGE_STATUSES,
   REDACTED_SNIPPET,
-  DEFAULT_BATCH_SIZE,
 } from "../src/lib/retention/purge";
 
 describe("scripts/retention.ts - CLI and Data Deletion Boundaries (#1330)", () => {
@@ -132,12 +131,15 @@ describe("scripts/retention.ts - CLI and Data Deletion Boundaries (#1330)", () =
           updateMany: vi.fn().mockResolvedValue({ count: 0 }),
         },
         webhookEvent: {
+          findMany: vi.fn().mockResolvedValue([]),
           deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
         },
         scanResult: {
+          findMany: vi.fn().mockResolvedValue([]),
           deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
         },
         auditLog: {
+          findMany: vi.fn().mockResolvedValue([]),
           deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
           create: vi.fn().mockResolvedValue({ id: "audit-1" }),
         },

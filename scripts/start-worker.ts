@@ -3,72 +3,106 @@ import { outboundWorker } from "../src/lib/queue/outboundWorker";
 import { sbomWorker } from "../src/lib/queue/sbomWorker";
 import { scanWorkerPool } from "../src/lib/queue/workerPool";
 import { setupWorkerSignalHandlers } from "../src/lib/queue/shutdown";
-import { describeWorkerStartup, planWorkerStartup } from "../src/lib/queue/scan-worker-bootstrap";
+import {
+  describeWorkerStartup,
+  planWorkerStartup,
+  type WorkerStartupPlan,
+} from "../src/lib/queue/scan-worker-bootstrap";
 import { createDlqAutoRetryWorker } from "../src/lib/queue/dlq-auto-retry";
-import express from "express";
+import express, { type Express } from "express";
+import type { Server } from "http";
 
-const app = express();
-
-app.get("/health", (req, res) => res.status(200).send("OK"));
-
-// Resolved before anything is started, so a bad SCAN_WORKER_CONCURRENCY fails
-// here with a message rather than reaching BullMQ as NaN.
-const plan = planWorkerStartup();
-
-worker.on("ready", () => {
-  console.log("🚀 BullMQ Worker (Inbound) successfully initialized and waiting for jobs...");
-});
-
-worker.on("error", (err) => {
-  console.error("❌ BullMQ Worker (Inbound) Error:", err);
-});
-
-outboundWorker.on("ready", () => {
-  console.log("🚀 BullMQ Worker (Outbound) successfully initialized and waiting for jobs...");
-});
-
-outboundWorker.on("error", (err) => {
-  console.error("❌ BullMQ Worker (Outbound) Error:", err);
-});
-
-sbomWorker.on("ready", () => {
-  console.log("🚀 BullMQ Worker (SBOM) successfully initialized and waiting for jobs...");
-});
-
-sbomWorker.on("error", (err) => {
-  console.error("❌ BullMQ Worker (SBOM) Error:", err);
-});
-
-// The `vulnerability-scans` queue had a producer — `POST /api/findings` via
-// `enqueueScan` — and no consumer, so every job it enqueued sat in Redis while
-// its ScanJob row stayed PENDING forever (#750).
-if (plan.scanWorkerEnabled) {
-  scanWorkerPool.start(plan.scanConcurrency ?? undefined);
-  console.log(`🚀 BullMQ Worker (Scans) started with concurrency=${plan.scanConcurrency}`);
+export function createWorkerApp(): Express {
+  const app = express();
+  app.get("/health", (req, res) => res.status(200).send("OK"));
+  return app;
 }
 
-const dlqAutoRetryWorker = createDlqAutoRetryWorker();
-dlqAutoRetryWorker.start();
-console.log("🔁 DLQ Auto-Retry Worker started");
+export interface StartWorkerOptions {
+  app?: Express;
+  port?: number;
+  plan?: WorkerStartupPlan;
+  autoListen?: boolean;
+  setupSignals?: boolean;
+}
 
-const server = app.listen(3000, () => {
-  console.log("Worker running on 3000");
-  // Stated explicitly: a queue with no consumer looks exactly like a queue with
-  // nothing in it, and nothing in the startup output used to say which workers
-  // had actually been attached.
-  console.log(`[Worker] ${describeWorkerStartup(plan)}`);
-});
+export interface StartWorkerResult {
+  app: Express;
+  server?: Server;
+  plan: WorkerStartupPlan;
+  dlqAutoRetryWorker: ReturnType<typeof createDlqAutoRetryWorker>;
+  drain: Array<() => Promise<void> | void>;
+}
 
-setupWorkerSignalHandlers({
-  workers: [worker, outboundWorker, sbomWorker],
-  // `scanWorkerPool` is not a BullMQ `Worker`, so it cannot go in `workers`.
-  // Without this a SIGTERM exits with a scan mid-flight still holding its lock.
-  drain: [
+export function startWorkerServer(options: StartWorkerOptions = {}): StartWorkerResult {
+  const app = options.app ?? createWorkerApp();
+  const plan = options.plan ?? planWorkerStartup();
+
+  worker.on("ready", () => {
+    console.log("🚀 BullMQ Worker (Inbound) successfully initialized and waiting for jobs...");
+  });
+
+  worker.on("error", (err) => {
+    console.error("❌ BullMQ Worker (Inbound) Error:", err);
+  });
+
+  outboundWorker.on("ready", () => {
+    console.log("🚀 BullMQ Worker (Outbound) successfully initialized and waiting for jobs...");
+  });
+
+  outboundWorker.on("error", (err) => {
+    console.error("❌ BullMQ Worker (Outbound) Error:", err);
+  });
+
+  sbomWorker.on("ready", () => {
+    console.log("🚀 BullMQ Worker (SBOM) successfully initialized and waiting for jobs...");
+  });
+
+  sbomWorker.on("error", (err) => {
+    console.error("❌ BullMQ Worker (SBOM) Error:", err);
+  });
+
+  if (plan.scanWorkerEnabled) {
+    scanWorkerPool.start(plan.scanConcurrency ?? undefined);
+    console.log(`🚀 BullMQ Worker (Scans) started with concurrency=${plan.scanConcurrency}`);
+  }
+
+  const dlqAutoRetryWorker = createDlqAutoRetryWorker();
+  dlqAutoRetryWorker.start();
+  console.log("🔁 DLQ Auto-Retry Worker started");
+
+  const port = options.port ?? 3000;
+  let server: Server | undefined;
+
+  if (options.autoListen !== false) {
+    server = app.listen(port, () => {
+      console.log(`Worker running on ${port}`);
+      console.log(`[Worker] ${describeWorkerStartup(plan)}`);
+    });
+  }
+
+  const drain: Array<() => Promise<void> | void> = [
     ...(plan.scanWorkerEnabled ? [() => scanWorkerPool.stop()] : []),
     () => dlqAutoRetryWorker.stop(),
-  ],
-  timeoutMs: 10000,
-  onShutdownComplete: () => {
-    server.close();
-  },
-});
+  ];
+
+  if (options.setupSignals !== false) {
+    setupWorkerSignalHandlers({
+      workers: [worker, outboundWorker, sbomWorker],
+      drain: drain as Array<() => Promise<void>>,
+      timeoutMs: 10000,
+      onShutdownComplete: () => {
+        if (server) {
+          server.close();
+        }
+      },
+    });
+  }
+
+  return { app, server, plan, dlqAutoRetryWorker, drain };
+}
+
+const isMain = process.argv[1] && /start-worker(\.ts|\.js)?$/.test(process.argv[1]);
+if (isMain) {
+  startWorkerServer();
+}

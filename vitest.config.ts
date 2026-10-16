@@ -17,6 +17,7 @@ export default defineConfig({
       "src/**/*.test.tsx",
       "cli/src/**/*.test.ts",
       "tests/**/*.test.ts",
+      "scripts/**/*.test.ts",
     ],
     exclude: ["**/node_modules/**", "**/dist/**", "**/*.redteam.test.ts", "**/*.redteam.test.tsx"],
     setupFiles: ["./vitest.setup.ts"],
