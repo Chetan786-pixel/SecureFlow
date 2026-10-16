@@ -84,6 +84,55 @@ describe("scanQueue", () => {
         },
       });
     });
+
+    it("marks the ScanJob FAILED and rethrows when queue add fails", async () => {
+      mockPrisma.scanJob.create.mockResolvedValue({ id: "scan-456" });
+      mockPrisma.scanJob.update.mockResolvedValue({});
+      mockQueueInstance.add.mockRejectedValueOnce(new Error("Redis down"));
+
+      await expect(
+        enqueueScan({
+          scanJobId: "",
+          repositoryId: "repo-1",
+          installationId: 12345,
+          repositoryFullName: "owner/repo",
+          prNumber: 42,
+          headSha: "abc123",
+          fileChanges: [{ filename: "test.ts", patch: "+code" }],
+          activePolicies: [],
+          customIgnores: [],
+          customPlaceholders: [],
+        }),
+      ).rejects.toThrow("Redis down");
+
+      expect(mockPrisma.scanJob.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "scan-456" },
+          data: expect.objectContaining({ status: "FAILED" }),
+        }),
+      );
+    });
+
+    it("still rethrows the original error if marking FAILED also fails", async () => {
+      mockPrisma.scanJob.create.mockResolvedValue({ id: "scan-789" });
+      mockPrisma.scanJob.update.mockRejectedValueOnce(new Error("DB down"));
+      mockQueueInstance.add.mockRejectedValueOnce(new Error("Redis down"));
+
+      await expect(
+        enqueueScan({
+          scanJobId: "",
+          repositoryId: "repo-1",
+          installationId: 12345,
+          repositoryFullName: "owner/repo",
+          prNumber: 42,
+          headSha: "abc123",
+          fileChanges: [],
+          activePolicies: [],
+          customIgnores: [],
+          customPlaceholders: [],
+        }),
+      ).rejects.toThrow("Redis down");
+    });
   });
 
   describe("getScanJobStatus", () => {
