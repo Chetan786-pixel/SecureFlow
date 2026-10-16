@@ -80,6 +80,10 @@ export interface EnqueueScanOptions {
  *
  * Creates a ScanJob record in the database for progress tracking,
  * then adds the job to the Redis queue.
+ *
+ * If adding the job to the queue fails, the ScanJob is marked FAILED so it is
+ * never left PENDING with no queue job to process it, and the original error
+ * is rethrown so the caller knows the scan was not queued.
  */
 export async function enqueueScan(
   data: ScanJobData,
@@ -98,15 +102,36 @@ export async function enqueueScan(
 
   const jobId = options.jobId ?? `scan-${scanJob.id}`;
 
-  // FIX: Assign the real database scanJob.id to the job data before adding to queue
+  // Assign the real database scanJob.id to the job data before adding to queue
   data.scanJobId = scanJob.id;
 
-  await scanQueue.add("scan-repository", data, {
-    jobId,
-    priority: 1, // Normal priority
-    attempts: 2,
-    backoff: { type: "exponential", delay: 10_000 },
-  });
+  try {
+    await scanQueue.add("scan-repository", data, {
+      jobId,
+      priority: 1, // Normal priority
+      attempts: 2,
+      backoff: { type: "exponential", delay: 10_000 },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[ScanQueue] Failed to enqueue scan job ${jobId}: ${message}`);
+
+    // Do not leave an orphaned PENDING row with no queue job behind it.
+    try {
+      await prisma.scanJob.update({
+        where: { id: scanJob.id },
+        data: {
+          status: "FAILED",
+          error: `Failed to enqueue scan: ${message}`,
+          completedAt: new Date(),
+        },
+      });
+    } catch (updateErr) {
+      console.error(`[ScanQueue] Failed to mark ScanJob ${scanJob.id} as FAILED:`, updateErr);
+    }
+
+    throw err;
+  }
 
   console.log(
     `[ScanQueue] Enqueued scan job ${jobId} for ${data.repositoryFullName}#${data.prNumber}`,
