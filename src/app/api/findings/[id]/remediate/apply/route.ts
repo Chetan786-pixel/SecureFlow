@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withErrorHandler } from "@/lib/middleware/error-handler";
 import { createHash } from "node:crypto";
 import { App } from "octokit";
 import { auth } from "@/auth";
@@ -37,7 +38,7 @@ async function readScopedSource(
   return null;
 }
 
-export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+async function handler(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -304,3 +305,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     );
   }
 }
+
+export const POST = withErrorHandler(
+  handler as (req: NextRequest, ...args: unknown[]) => Promise<NextResponse>,
+  { routeLabel: "findings:remediate:apply" },
+) as typeof handler;
