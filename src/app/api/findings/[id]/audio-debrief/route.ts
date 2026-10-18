@@ -119,7 +119,7 @@ async function handler(request: NextRequest, { params }: { params: Promise<{ id:
     remediation,
   });
 
-  const cacheKey = getAudioDebriefCacheKey(finding.id, briefText);
+  const cacheKey = getAudioDebriefCacheKey(finding.id, briefText, remediation);
 
   // Cached audio serves instantly without triggering downstream ElevenLabs generation
   const cachedAudio = await getCachedAudioDebrief(cacheKey);
@@ -131,14 +131,34 @@ async function handler(request: NextRequest, { params }: { params: Promise<{ id:
         "Content-Length": String(cachedAudio.length),
         "X-Audio-Cache": "HIT",
         "Cache-Control": "public, max-age=86400, immutable",
+        ETag: `"${cacheKey}"`,
       },
     });
   }
 
+  // If client explicitly requests JSON and ELEVENLABS_API_KEY is not configured
+  if (
+    request.headers.get("accept")?.includes("application/json") &&
+    !process.env.ELEVENLABS_API_KEY
+  ) {
+    return NextResponse.json(
+      {
+        error: "Configuration Error",
+        message: "ElevenLabs API key is not configured.",
+      },
+      { status: 503 },
+    );
+  }
+
   // Stream synthesized audio using ElevenLabs low-latency chunked streaming
-  const elevenLabsStream = await fetchElevenLabsAudioStream(briefText, {
-    optimizeLatency: 3,
-  });
+  let elevenLabsStream: Response | null = null;
+  try {
+    elevenLabsStream = await fetchElevenLabsAudioStream(briefText, {
+      optimizeLatency: 3,
+    });
+  } catch (err) {
+    console.warn("[AUDIO_DEBRIEF] Failed to stream from ElevenLabs:", err);
+  }
 
   if (elevenLabsStream && elevenLabsStream.body) {
     const [streamForClient, streamForCache] = elevenLabsStream.body.tee();
@@ -169,8 +189,20 @@ async function handler(request: NextRequest, { params }: { params: Promise<{ id:
         "X-Audio-Cache": "MISS",
         "Transfer-Encoding": "chunked",
         "Cache-Control": "no-cache",
+        ETag: `"${cacheKey}"`,
       },
     });
+  }
+
+  // If client explicitly requests JSON and upstream ElevenLabs synthesis failed
+  if (request.headers.get("accept")?.includes("application/json")) {
+    return NextResponse.json(
+      {
+        error: "Bad Gateway",
+        message: "Failed to generate audio stream from upstream ElevenLabs service.",
+      },
+      { status: 502 },
+    );
   }
 
   // Fallback playable MP3 audio buffer
@@ -183,6 +215,7 @@ async function handler(request: NextRequest, { params }: { params: Promise<{ id:
       "Content-Type": "audio/mpeg",
       "Content-Length": String(fallbackBuffer.length),
       "X-Audio-Cache": "FALLBACK",
+      "Cache-Control": "no-store",
     },
   });
 }

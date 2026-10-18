@@ -43,6 +43,9 @@ describe("cli/src/lib/audio-player", () => {
       expect(isNonInteractiveCiEnvironment({ TRAVIS: "true" })).toBe(true);
       expect(isNonInteractiveCiEnvironment({ CONTINUOUS_INTEGRATION: "true" })).toBe(true);
       expect(isNonInteractiveCiEnvironment({ BUILDKITE: "true" })).toBe(true);
+      expect(isNonInteractiveCiEnvironment({ DOCKER: "true" })).toBe(true);
+      expect(isNonInteractiveCiEnvironment({ DOCKER_CONTAINER: "true" })).toBe(true);
+      expect(isNonInteractiveCiEnvironment({ container: "docker" })).toBe(true);
     });
 
     it("returns false in interactive developer environments", () => {
@@ -243,6 +246,52 @@ describe("cli/src/lib/audio-player", () => {
         expect.objectContaining({ method: "POST" }),
       );
       expect(buffer).toEqual(mockAudioBytes);
+    });
+
+    it("logs warning on ElevenLabs 429 rate limit quota exhaustion", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ detail: { status: "quota_exceeded" } }), {
+            status: 429,
+            statusText: "Too Many Requests",
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+        .mockRejectedValueOnce(new Error("scan failed"));
+      vi.stubGlobal("fetch", fetchMock);
+
+      await fetchAudioSummary("Test quota", {
+        env: { ELEVENLABS_API_KEY: "key" },
+      });
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("ElevenLabs rate limit reached (429 Too Many Requests)"),
+      );
+    });
+
+    it("logs warning on ElevenLabs 401 unauthorized", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ detail: "invalid_api_key" }), {
+            status: 401,
+            statusText: "Unauthorized",
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+        .mockRejectedValueOnce(new Error("scan failed"));
+      vi.stubGlobal("fetch", fetchMock);
+
+      await fetchAudioSummary("Test unauth", {
+        env: { ELEVENLABS_API_KEY: "bad-key" },
+      });
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("ElevenLabs authentication failed (401 Unauthorized)"),
+      );
     });
 
     it("parses base64 audio response from /api/cli/scan JSON payload", async () => {

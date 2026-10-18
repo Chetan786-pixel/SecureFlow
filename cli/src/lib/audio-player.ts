@@ -27,7 +27,10 @@ export function isNonInteractiveCiEnvironment(env: AudioPlayerEnv = process.env)
     env.CIRCLECI ||
     env.TRAVIS ||
     env.CONTINUOUS_INTEGRATION ||
-    env.BUILDKITE,
+    env.BUILDKITE ||
+    env.DOCKER === "true" ||
+    env.DOCKER_CONTAINER === "true" ||
+    env.container === "docker",
   );
 }
 
@@ -159,6 +162,12 @@ export async function fetchAudioSummary(
       if (response.ok) {
         const arrayBuf = await response.arrayBuffer();
         return Buffer.from(arrayBuf);
+      }
+
+      if (response.status === 429) {
+        console.warn("⚠️  [SecureFlow] ElevenLabs rate limit reached (429 Too Many Requests).");
+      } else if (response.status === 401) {
+        console.warn("⚠️  [SecureFlow] ElevenLabs authentication failed (401 Unauthorized). Check API key.");
       }
     } catch {
       // Fallback to /api/cli/scan
