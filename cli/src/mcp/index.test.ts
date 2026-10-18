@@ -8,6 +8,13 @@ import {
   queryLiveThreatIntelligence,
 } from "./index.js";
 
+type TextContentItem = { type: string; text: string };
+
+function getTextContent(response: Awaited<ReturnType<Client["callTool"]>>): TextContentItem[] {
+  expect(Array.isArray(response.content)).toBe(true);
+  return response.content as TextContentItem[];
+}
+
 describe("cli/src/mcp (SecureFlow Threat Intelligence MCP Server)", () => {
   describe("KNOWLEDGE_BASE", () => {
     it("contains registered threat intelligence entries with required fields", () => {
@@ -187,10 +194,11 @@ describe("cli/src/mcp (SecureFlow Threat Intelligence MCP Server)", () => {
         });
 
         expect(response.isError).toBeFalsy();
-        expect(response.content).toHaveLength(1);
-        expect(response.content[0].type).toBe("text");
+        const content = getTextContent(response);
+        expect(content).toHaveLength(1);
+        expect(content[0].type).toBe("text");
 
-        const data = JSON.parse(response.content[0].text);
+        const data = JSON.parse(content[0].text);
         expect(Array.isArray(data)).toBe(true);
         expect(data.length).toBeGreaterThanOrEqual(1);
         expect(data[0].id).toBe("CVE-2023-3409");
@@ -203,7 +211,8 @@ describe("cli/src/mcp (SecureFlow Threat Intelligence MCP Server)", () => {
         });
 
         expect(response.isError).toBeFalsy();
-        const data = JSON.parse(response.content[0].text);
+        const content = getTextContent(response);
+        const data = JSON.parse(content[0].text);
         expect(Array.isArray(data)).toBe(true);
         expect(data.length).toBe(2); // KNOWLEDGE_BASE.slice(0, 2)
       });
@@ -217,9 +226,10 @@ describe("cli/src/mcp (SecureFlow Threat Intelligence MCP Server)", () => {
         });
 
         expect(response.isError).toBe(true);
-        expect(response.content).toHaveLength(1);
+        const content = getTextContent(response);
+        expect(content).toHaveLength(1);
 
-        const errorPayload = JSON.parse(response.content[0].text);
+        const errorPayload = JSON.parse(content[0].text);
         expect(errorPayload.code).toBe("ARMORIQ_INTENT_VERIFICATION_FAILED");
         expect(errorPayload.enforcement).toBe("FAIL_CLOSED");
         expect(errorPayload.error).toContain("Adversarial prompt injection");
@@ -234,7 +244,8 @@ describe("cli/src/mcp (SecureFlow Threat Intelligence MCP Server)", () => {
         });
 
         expect(response.isError).toBeFalsy();
-        const data = JSON.parse(response.content[0].text);
+        const content = getTextContent(response);
+        const data = JSON.parse(content[0].text);
         expect(data.id).toBe("CVE-2023-3409");
         expect(data.category).toBe("SQL Injection");
         expect(data.severity).toBe("critical");
@@ -247,7 +258,8 @@ describe("cli/src/mcp (SecureFlow Threat Intelligence MCP Server)", () => {
         });
 
         expect(response.isError).toBeFalsy();
-        const data = JSON.parse(response.content[0].text);
+        const content = getTextContent(response);
+        const data = JSON.parse(content[0].text);
         expect(data.id).toBe("CWE-79");
         expect(data.category).toBe("Cross-Site Scripting");
       });
@@ -259,7 +271,8 @@ describe("cli/src/mcp (SecureFlow Threat Intelligence MCP Server)", () => {
         });
 
         expect(response.isError).toBeFalsy();
-        const data = JSON.parse(response.content[0].text);
+        const content = getTextContent(response);
+        const data = JSON.parse(content[0].text);
         expect(data.error).toContain("No advisory found for ID: CVE-2099-9999");
         expect(data.recommendation).toBeDefined();
       });
@@ -274,7 +287,8 @@ describe("cli/src/mcp (SecureFlow Threat Intelligence MCP Server)", () => {
         });
 
         expect(response.isError).toBe(true);
-        const errorPayload = JSON.parse(response.content[0].text);
+        const content = getTextContent(response);
+        const errorPayload = JSON.parse(content[0].text);
         expect(errorPayload.code).toBe("ARMORIQ_INTENT_VERIFICATION_FAILED");
         expect(errorPayload.enforcement).toBe("FAIL_CLOSED");
         expect(errorPayload.error).toContain("Action blocked by ArmorIQ");
