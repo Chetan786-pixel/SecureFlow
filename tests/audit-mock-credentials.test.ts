@@ -80,5 +80,56 @@ describe("Mock Data Credentials Security Audit (#1303, #1354)", () => {
       const client = new ArmorIQClient();
       expect(client.apiKey).toBe(SAFE_MOCK_ARMORIQ_API_KEY);
     });
+
+    it("supports standardized blocked intent, policy violation, and degraded helpers (#1355)", async () => {
+      const {
+        setMockArmorIQBlockedIntent,
+        setMockArmorIQPolicyViolation,
+        setMockArmorIQDegraded,
+        resetMockArmorIQ,
+        mockArmorIQState,
+        ArmorIQClient,
+        ArmorIQTimeoutError,
+        ArmorIQUnreachableError,
+      } = await import("../__mocks__/@armoriq/sdk");
+
+      // 1. Blocked intent simulation
+      setMockArmorIQBlockedIntent("Malicious injection attempt", "PROMPT_INJECTION_DETECTED");
+      expect(mockArmorIQState.decision).toBe("BLOCK");
+      expect(mockArmorIQState.ruleMatched).toBe("PROMPT_INJECTION_DETECTED");
+      expect(mockArmorIQState.justification).toBe("Malicious injection attempt");
+      expect(mockArmorIQState.validProof).toBe(false);
+
+      // 2. Policy violation simulation
+      setMockArmorIQPolicyViolation("deny:path_traversal", "Sensitive path traversal detected");
+      expect(mockArmorIQState.decision).toBe("BLOCK");
+      expect(mockArmorIQState.ruleMatched).toBe("deny:path_traversal");
+      expect(mockArmorIQState.justification).toBe("Sensitive path traversal detected");
+
+      // 3. Degraded mode - unreachable
+      setMockArmorIQDegraded(true, "unreachable");
+      expect(mockArmorIQState.shouldFailUnreachable).toBe(true);
+      expect(mockArmorIQState.shouldTimeout).toBe(false);
+
+      const client = new ArmorIQClient();
+      await expect(client.verifyToken("test-token")).rejects.toThrow(ArmorIQUnreachableError);
+      await expect(client.getIntentToken({}, {})).rejects.toThrow(ArmorIQUnreachableError);
+
+      // 4. Degraded mode - timeout
+      setMockArmorIQDegraded(true, "timeout");
+      expect(mockArmorIQState.shouldTimeout).toBe(true);
+      expect(mockArmorIQState.shouldFailUnreachable).toBe(false);
+      await expect(client.verifyIntentToken("test-token")).rejects.toThrow(ArmorIQTimeoutError);
+
+      // 5. Reset mock state
+      resetMockArmorIQ();
+      expect(mockArmorIQState.decision).toBe("ALLOW");
+      expect(mockArmorIQState.shouldTimeout).toBe(false);
+      expect(mockArmorIQState.shouldFailUnreachable).toBe(false);
+
+      const tokenResult = await client.getIntentToken({ plan: "test" }, { policy: "strict" });
+      expect(tokenResult.token).toBeDefined();
+      expect(tokenResult.tokenId).toContain("intent_token_");
+    });
   });
 });

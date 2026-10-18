@@ -57,6 +57,16 @@ export const mockArmorIQState = {
   timeoutMs: 15_000,
 };
 
+/**
+ * Intent token contract for ArmorIQ runtime policy evaluation.
+ */
+export interface IntentToken {
+  tokenId?: string;
+  token?: string;
+  rawToken?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
 export function setMockArmorIQDecision(
   decision: "ALLOW" | "BLOCK" | "HOLD",
   ruleMatched = "RULE_SPECIFIED",
@@ -65,6 +75,48 @@ export function setMockArmorIQDecision(
   mockArmorIQState.decision = decision;
   mockArmorIQState.ruleMatched = ruleMatched;
   mockArmorIQState.justification = justification;
+}
+
+/**
+ * Helper to simulate blocked intents (prompt injection, tampered tokens).
+ */
+export function setMockArmorIQBlockedIntent(
+  reason = "Intent token blocked: unauthorized prompt injection detected",
+  rule = "PROMPT_INJECTION_DETECTED",
+) {
+  mockArmorIQState.decision = "BLOCK";
+  mockArmorIQState.ruleMatched = rule;
+  mockArmorIQState.justification = reason;
+  mockArmorIQState.validProof = false;
+  mockArmorIQState.validSignature = false;
+}
+
+/**
+ * Helper to simulate organizational policy violations.
+ */
+export function setMockArmorIQPolicyViolation(
+  rule = "POLICY_VIOLATION",
+  justification = "Action violates organizational security policy",
+) {
+  mockArmorIQState.decision = "BLOCK";
+  mockArmorIQState.ruleMatched = rule;
+  mockArmorIQState.justification = justification;
+}
+
+/**
+ * Helper to simulate degraded or offline ArmorIQ gateway states.
+ */
+export function setMockArmorIQDegraded(
+  shouldFail = true,
+  mode: "timeout" | "unreachable" = "unreachable",
+) {
+  if (mode === "timeout") {
+    mockArmorIQState.shouldTimeout = shouldFail;
+    mockArmorIQState.shouldFailUnreachable = false;
+  } else {
+    mockArmorIQState.shouldFailUnreachable = shouldFail;
+    mockArmorIQState.shouldTimeout = false;
+  }
 }
 
 export function setMockArmorIQTimeout(shouldTimeout: boolean) {
@@ -167,6 +219,27 @@ export const mockRecordAuditLog = vi
     };
   });
 
+export const mockVerifyToken = mockVerifyIntentToken;
+
+export const mockGetIntentToken = vi
+  .fn()
+  .mockImplementation(async (plan: unknown, policy: unknown, ttl = 3600) => {
+    if (mockArmorIQState.shouldTimeout) {
+      throw new ArmorIQTimeoutError();
+    }
+    if (mockArmorIQState.shouldFailUnreachable) {
+      throw new ArmorIQUnreachableError();
+    }
+    return {
+      tokenId: `intent_token_${Date.now()}`,
+      token: SAFE_MOCK_INTENT_TOKEN,
+      plan,
+      policy,
+      ttl,
+      expiresAt: new Date(Date.now() + ttl * 1000).toISOString(),
+    };
+  });
+
 export class ArmorIQClient {
   public apiKey: string;
 
@@ -174,7 +247,9 @@ export class ArmorIQClient {
     this.apiKey = options.apiKey || SAFE_MOCK_ARMORIQ_API_KEY;
   }
 
+  public verifyToken = mockVerifyToken;
   public verifyIntentToken = mockVerifyIntentToken;
+  public getIntentToken = mockGetIntentToken;
   public signIntent = mockSignIntent;
   public evaluatePolicy = mockEvaluatePolicy;
   public validateProof = mockValidateProof;
