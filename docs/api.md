@@ -659,6 +659,7 @@ Required across the API surface:
 | `GITHUB_APP_ID`            | `/api/webhooks/github`   | SecureFlow GitHub App ID.                               |
 | `GITHUB_PRIVATE_KEY`       | `/api/webhooks/github`   | App PEM private key (`\n`-escaped).                     |
 | `GITHUB_WEBHOOK_SECRET`    | `/api/webhooks/github`   | HMAC secret for webhook signature verification.         |
+| `WEBHOOK_MAX_BYTES`        | Generic webhook routes   | (Optional) Body cap in bytes; default 1 MiB.            |
 | `NEXT_PUBLIC_APP_URL`      | `/share/heist` (OG meta) | Public origin for absolute OG image URLs.               |
 | `DATABASE_URL`             | All DB-backed routes     | Postgres connection string.                             |
 | `UPSTASH_REDIS_REST_URL`   | `withRateLimit`          | (Optional) Upstash Redis for distributed rate limiting. |

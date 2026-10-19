@@ -14,6 +14,7 @@
  *
  * Environment variables:
  *   WEBHOOK_SECRET - Shared HMAC secret for signature verification.
+ *   WEBHOOK_MAX_BYTES - Largest body accepted, in bytes (default 1 MiB).
  */
 
 import { withRateLimit } from "@/lib/middleware/rate-limit";

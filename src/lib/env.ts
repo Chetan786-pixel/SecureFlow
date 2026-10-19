@@ -19,6 +19,7 @@ const envSchema = z.object({
   // Optional
   DB_POOL_MAX: z.string().optional(),
   GITHUB_WEBHOOK_MAX_BYTES: z.string().optional(),
+  WEBHOOK_MAX_BYTES: z.string().optional(),
   GITHUB_APP_URL: z.string().optional(),
   ARMORIQ_API_KEY: z.string().optional(),
   USER_ID: z.string().optional(),
