@@ -2,8 +2,9 @@
  * Webhook Guard — Next.js middleware for inbound webhook signature validation.
  *
  * Wraps a Next.js route handler to enforce:
- * 1. HMAC-SHA256 signature verification
- * 2. Timestamp-based replay protection (5-minute window)
+ * 1. A cap on the body size, checked before the body is buffered
+ * 2. HMAC-SHA256 signature verification
+ * 3. Timestamp-based replay protection (5-minute window)
  *
  * This module is the only caller of `admitWebhookRequest`, so it is where the
  * policy decisions live -- in particular the refusal to run at all without a
@@ -22,6 +23,8 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { AppError } from "@/lib/middleware/error-handler";
+import { readBoundedRequestBytes } from "@/lib/request-body";
 import {
   admitWebhookRequest,
   signPayload,
@@ -48,8 +51,56 @@ export interface WebhookGuardOptions {
   timestampHeader?: string;
   /** Replay window in seconds (default: 300 = 5 minutes). */
   replayWindowSeconds?: number;
+  /**
+   * Largest body accepted, in bytes (default: {@link DEFAULT_MAX_WEBHOOK_BODY_BYTES}).
+   * Like `secret`, read once per request, so it may be a getter.
+   */
+  maxBodyBytes?: number;
   /** Custom error handler. */
   onError?: (error: { status: number; message: string }) => NextResponse;
+}
+
+/**
+ * Default cap on an inbound webhook body: 1 MiB.
+ *
+ * The body has to be read before the signature can be checked, so without a
+ * cap anyone who can reach the endpoint can make the process buffer as much
+ * as they care to send, with no secret at all. The rate limit bounds how
+ * often, not how much. Alert payloads from the senders these routes serve are
+ * a few kilobytes.
+ */
+export const DEFAULT_MAX_WEBHOOK_BODY_BYTES = 1024 * 1024;
+
+/**
+ * Read a configured body cap such as `WEBHOOK_MAX_BYTES`, falling back to the
+ * default for anything that is not a positive integer.
+ */
+export function resolveMaxWebhookBodyBytes(raw: string | undefined): number {
+  if (raw === undefined || raw.trim() === "") return DEFAULT_MAX_WEBHOOK_BODY_BYTES;
+  const parsed = Number(raw.trim());
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_WEBHOOK_BODY_BYTES;
+}
+
+const PAYLOAD_TOO_LARGE = {
+  status: 413,
+  message: "Webhook payload exceeds the configured size limit",
+} as const;
+
+/**
+ * Read the body as raw bytes, enforcing the cap.
+ *
+ * `Content-Length` is checked first so a declared-oversized body is refused
+ * without reading it. The bytes are then counted as they arrive, because the
+ * header is absent on a chunked request and can be wrong on any request.
+ * Returns `null` when the cap is exceeded.
+ */
+async function readCappedBody(req: NextRequest, maxBytes: number): Promise<Uint8Array | null> {
+  try {
+    return await readBoundedRequestBytes(req, maxBytes);
+  } catch (error) {
+    if (error instanceof AppError && error.statusCode === 413) return null;
+    throw error;
+  }
 }
 
 /**
@@ -81,8 +132,8 @@ export function isUsableSecret(secret: unknown): secret is string {
  *
  * The guard:
  * - Refuses to run without a usable secret
- * - Reads the request body (required for signature verification)
- * - Validates the HMAC signature
+ * - Reads the request body up to the size cap (required for signature verification)
+ * - Validates the HMAC signature over the bytes as received
  * - Checks the timestamp against the replay window
  * - Passes the verified payload to the handler as its second argument
  *
@@ -119,12 +170,17 @@ export function withWebhookGuard(
       return fail(MISCONFIGURED);
     }
 
-    // Read the body first — signature is over the raw bytes
-    const payload = await req.text();
+    // Read the body first — signature is over the raw bytes, so those are
+    // what gets verified. The handler gets them decoded.
+    const body = await readCappedBody(req, options.maxBodyBytes ?? DEFAULT_MAX_WEBHOOK_BODY_BYTES);
+    if (!body) {
+      return fail(PAYLOAD_TOO_LARGE);
+    }
+    const payload = new TextDecoder().decode(body);
 
     // Run admission checks
     const result = admitWebhookRequest(
-      payload,
+      body,
       secret,
       req.headers.get(signatureHeader),
       req.headers.get(timestampHeader),
@@ -199,6 +255,7 @@ export async function verifyWebhookRequest(
     signatureHeader?: string;
     timestampHeader?: string;
     replayWindowSeconds?: number;
+    maxBodyBytes?: number;
   },
 ): Promise<WebhookVerification> {
   const reject = (error: { status: number; message: string }): WebhookVerification => ({
@@ -211,10 +268,12 @@ export async function verifyWebhookRequest(
     return reject(MISCONFIGURED);
   }
 
-  const payload = await req.text();
+  const body = await readCappedBody(req, options?.maxBodyBytes ?? DEFAULT_MAX_WEBHOOK_BODY_BYTES);
+  if (!body) return reject(PAYLOAD_TOO_LARGE);
+  const payload = new TextDecoder().decode(body);
 
   const result = admitWebhookRequest(
-    payload,
+    body,
     secret,
     req.headers.get(options?.signatureHeader ?? SIGNATURE_HEADER),
     req.headers.get(options?.timestampHeader ?? TIMESTAMP_HEADER),

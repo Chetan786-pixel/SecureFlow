@@ -66,6 +66,20 @@ export const DEFAULT_REPLAY_WINDOW_SECONDS = 300;
  */
 const TIMESTAMP_AGREEMENT_SECONDS = 1;
 
+/**
+ * A request body as it is verified. Bytes are used exactly as received; a
+ * string stands for its UTF-8 encoding.
+ */
+export type SignedPayload = string | Uint8Array;
+
+/** Hex HMAC-SHA256 over `prefix` followed by the payload. */
+function hmacHex(secret: string, prefix: string, payload: SignedPayload): string {
+  const hmac = createHmac("sha256", secret).update(prefix, "utf8");
+  if (typeof payload === "string") hmac.update(payload, "utf8");
+  else hmac.update(payload);
+  return hmac.digest("hex");
+}
+
 /** A parsed `X-SecureFlow-Signature` value. */
 export type ParsedSignature =
   { scheme: "v1"; hex: string; timestampSeconds: number } | { scheme: "legacy"; hex: string };
@@ -185,7 +199,7 @@ function normalizeHex(value: string | null | undefined): string | null {
  * @returns `true` if the signature is valid.
  */
 export function verifySignature(
-  payload: string,
+  payload: SignedPayload,
   secret: string,
   signatureHeader: string | null | undefined,
   timestampHeader?: string | null | undefined,
@@ -201,14 +215,13 @@ export function verifySignature(
 
 /** Constant-time comparison of the expected digest against a parsed header. */
 function digestMatches(
-  payload: string,
+  payload: SignedPayload,
   secret: string,
   parsed: ParsedSignature,
   timestampSeconds?: number,
 ): boolean {
   if (parsed.scheme === "v1") {
-    const material = `${parsed.timestampSeconds}.${payload}`;
-    const digest = createHmac("sha256", secret).update(material, "utf8").digest("hex");
+    const digest = hmacHex(secret, `${parsed.timestampSeconds}.`, payload);
     const expected = Buffer.from(parsed.hex, "hex");
     const provided = Buffer.from(digest, "hex");
     if (provided.length !== expected.length) return false;
@@ -217,8 +230,7 @@ function digestMatches(
 
   // legacy scheme: try timestamp-bound digest first if timestampSeconds is provided
   if (timestampSeconds !== undefined) {
-    const timestampMaterial = `${timestampSeconds}.${payload}`;
-    const digest = createHmac("sha256", secret).update(timestampMaterial, "utf8").digest("hex");
+    const digest = hmacHex(secret, `${timestampSeconds}.`, payload);
     const expected = Buffer.from(parsed.hex, "hex");
     const provided = Buffer.from(digest, "hex");
     if (provided.length === expected.length && timingSafeEqual(provided, expected)) {
@@ -227,7 +239,7 @@ function digestMatches(
   }
 
   // Fallback to bare body digest for backward compatibility with legacy un-bound senders
-  const bareDigest = createHmac("sha256", secret).update(payload, "utf8").digest("hex");
+  const bareDigest = hmacHex(secret, "", payload);
   const expected = Buffer.from(parsed.hex, "hex");
   const provided = Buffer.from(bareDigest, "hex");
   if (provided.length !== expected.length) return false;
@@ -282,7 +294,8 @@ export function isWithinReplayWindow(
  * the two schemes collapse into the same weakness — the window would police a
  * header nothing signed.
  *
- * @param payload - The raw request body.
+ * @param payload - The raw request body. Pass the bytes as received where
+ *   possible; a string is verified as its UTF-8 encoding.
  * @param secret - The shared HMAC secret.
  * @param signatureHeader - The `X-SecureFlow-Signature` header value.
  * @param timestampHeader - The `X-SecureFlow-Timestamp` header value.
@@ -290,7 +303,7 @@ export function isWithinReplayWindow(
  * @returns An admission result with `ok: true` or an error message.
  */
 export function admitWebhookRequest(
-  payload: string,
+  payload: SignedPayload,
   secret: string,
   signatureHeader: string | null | undefined,
   timestampHeader: string | null | undefined,
