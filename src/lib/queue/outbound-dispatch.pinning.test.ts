@@ -384,11 +384,33 @@ describe("dispatchOutboundWebhook through the pinned transport", () => {
   });
 });
 
-/** `openssl` makes the test certificate; skip the TLS checks where it is missing. */
 function opensslAvailable(): boolean {
   try {
-    execFileSync("openssl", ["version"], { stdio: "ignore" });
-    return true;
+    const dir = mkdtempSync(path.join(tmpdir(), "openssl-test-"));
+    try {
+      execFileSync(
+        "openssl",
+        [
+          "req",
+          "-x509",
+          "-newkey",
+          "rsa:2048",
+          "-nodes",
+          "-keyout",
+          path.join(dir, "key.pem"),
+          "-out",
+          path.join(dir, "cert.pem"),
+          "-days",
+          "1",
+          "-subj",
+          "/CN=hooks.example.test",
+        ],
+        { stdio: "ignore" },
+      );
+      return true;
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   } catch {
     return false;
   }
