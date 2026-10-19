@@ -39,13 +39,15 @@ import { POST } from "@/app/api/webhooks/route";
 
 const WEBHOOK_SECRET = "test-secret-key-12345";
 
-function makeSignature(payload: string, secret: string): string {
-  return `sha256=${createHmac("sha256", secret).update(payload).digest("hex")}`;
+/** A legacy signature, bound to `timestamp` when one is given and over the bare body otherwise. */
+function makeSignature(payload: string, secret: string, timestamp?: string): string {
+  const material = timestamp === undefined ? payload : `${timestamp}.${payload}`;
+  return `sha256=${createHmac("sha256", secret).update(material).digest("hex")}`;
 }
 
 function makeRequest(body: string, extraHeaders: Record<string, string> = {}) {
   const timestamp = Math.floor(Date.now() / 1000).toString();
-  const signature = makeSignature(body, WEBHOOK_SECRET);
+  const signature = makeSignature(body, WEBHOOK_SECRET, timestamp);
 
   return new Request("http://localhost:3000/api/webhooks", {
     method: "POST",
@@ -131,7 +133,7 @@ describe("/api/webhooks (generic webhook route)", () => {
   it("rejects request with expired timestamp", async () => {
     const payload = JSON.stringify({ event: "ping" });
     const oldTimestamp = Math.floor(Date.now() / 1000 - 600).toString(); // 10 minutes ago
-    const signature = makeSignature(payload, WEBHOOK_SECRET);
+    const signature = makeSignature(payload, WEBHOOK_SECRET, oldTimestamp);
 
     const req = new Request("http://localhost:3000/api/webhooks", {
       method: "POST",
@@ -170,6 +172,37 @@ describe("/api/webhooks (generic webhook route)", () => {
 
     const res = await POST(req as any);
     expect(res.status).toBe(400);
+  });
+
+  describe("unbound legacy signatures (WEBHOOK_ALLOW_UNBOUND_LEGACY_SIGNATURES)", () => {
+    afterEach(() => {
+      delete process.env.WEBHOOK_ALLOW_UNBOUND_LEGACY_SIGNATURES;
+    });
+
+    const bareSigned = (payload: string) =>
+      makeRequest(payload, { "X-SecureFlow-Signature": makeSignature(payload, WEBHOOK_SECRET) });
+
+    it("rejects a bare-body signature by default", async () => {
+      const res = await POST(bareSigned(JSON.stringify({ event: "ping" })) as any);
+
+      expect(res.status).toBe(401);
+    });
+
+    it("accepts a bare-body signature when the switch is on", async () => {
+      process.env.WEBHOOK_ALLOW_UNBOUND_LEGACY_SIGNATURES = "true";
+
+      const res = await POST(bareSigned(JSON.stringify({ event: "ping" })) as any);
+
+      expect(res.status).toBe(200);
+    });
+
+    it.each(["1", "yes", "TRUE ", "false"])("treats %j as off", async (value) => {
+      process.env.WEBHOOK_ALLOW_UNBOUND_LEGACY_SIGNATURES = value;
+
+      const res = await POST(bareSigned(JSON.stringify({ event: "ping" })) as any);
+
+      expect(res.status).toBe(401);
+    });
   });
 
   describe("body size cap (WEBHOOK_MAX_BYTES)", () => {

@@ -11,10 +11,13 @@
  * rewriting the `X-SecureFlow-Timestamp` header — the window and the signature
  * are checking the same number.
  *
- * **legacy.** `sha256=<hex>`, digest over the bare body. Still accepted, because
- * senders configured against the previous shape of this module are already
- * sending it, but it is weaker: the digest does not cover a timestamp, so the
- * replay window is enforced against an unauthenticated header. Prefer v1.
+ * **legacy.** `sha256=<hex>`. Admitted when the digest is over
+ * `` `${timestamp}.${body}` `` (what `signPayload` produces when given a
+ * timestamp, and what `signOutboundWebhook` sends). A digest over the bare body
+ * is refused by {@link admitWebhookRequest} unless the caller opts in with
+ * `allowUnboundLegacySignatures`: it covers no timestamp, so a captured request
+ * stays valid forever. Rewriting `X-SecureFlow-Timestamp` to the current time
+ * moves it back inside the replay window. Prefer v1.
  *
  * Before #716 this module knew only the legacy format, which meant SecureFlow
  * rejected the webhooks SecureFlow sent: `verifySignature` returned `false` for
@@ -192,6 +195,10 @@ function normalizeHex(value: string | null | undefined): string | null {
  * header, so a v1 signature is verified over `` `${t}.${payload}` `` and a
  * legacy one over `` `${t}.${payload}` `` (or `payload` as fallback).
  *
+ * This answers "was this signed with the secret", nothing more. It applies no
+ * replay window and accepts an unbound legacy digest, so it is not an
+ * admission check: inbound requests go through {@link admitWebhookRequest}.
+ *
  * @param payload - The raw payload string that was signed.
  * @param secret - The shared secret key.
  * @param signatureHeader - The full signature header value.
@@ -213,6 +220,41 @@ export function verifySignature(
   return digestMatches(payload, secret, parsed, timestampSeconds);
 }
 
+/** Constant-time comparison of a computed hex digest against the header's. */
+function hexDigestEquals(computed: string, provided: string): boolean {
+  const a = Buffer.from(computed, "hex");
+  const b = Buffer.from(provided, "hex");
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/**
+ * Which digest a header matched, or `null` for none.
+ *
+ * `"unbound"` means a legacy digest over the bare body: valid as a signature,
+ * but tied to no timestamp. Admission decides whether that is acceptable.
+ */
+function matchDigest(
+  payload: SignedPayload,
+  secret: string,
+  parsed: ParsedSignature,
+  timestampSeconds?: number,
+): "v1" | "bound" | "unbound" | null {
+  if (parsed.scheme === "v1") {
+    return hexDigestEquals(hmacHex(secret, `${parsed.timestampSeconds}.`, payload), parsed.hex)
+      ? "v1"
+      : null;
+  }
+
+  if (
+    timestampSeconds !== undefined &&
+    hexDigestEquals(hmacHex(secret, `${timestampSeconds}.`, payload), parsed.hex)
+  ) {
+    return "bound";
+  }
+
+  return hexDigestEquals(hmacHex(secret, "", payload), parsed.hex) ? "unbound" : null;
+}
+
 /** Constant-time comparison of the expected digest against a parsed header. */
 function digestMatches(
   payload: SignedPayload,
@@ -220,31 +262,7 @@ function digestMatches(
   parsed: ParsedSignature,
   timestampSeconds?: number,
 ): boolean {
-  if (parsed.scheme === "v1") {
-    const digest = hmacHex(secret, `${parsed.timestampSeconds}.`, payload);
-    const expected = Buffer.from(parsed.hex, "hex");
-    const provided = Buffer.from(digest, "hex");
-    if (provided.length !== expected.length) return false;
-    return timingSafeEqual(provided, expected);
-  }
-
-  // legacy scheme: try timestamp-bound digest first if timestampSeconds is provided
-  if (timestampSeconds !== undefined) {
-    const digest = hmacHex(secret, `${timestampSeconds}.`, payload);
-    const expected = Buffer.from(parsed.hex, "hex");
-    const provided = Buffer.from(digest, "hex");
-    if (provided.length === expected.length && timingSafeEqual(provided, expected)) {
-      return true;
-    }
-  }
-
-  // Fallback to bare body digest for backward compatibility with legacy un-bound senders
-  const bareDigest = hmacHex(secret, "", payload);
-  const expected = Buffer.from(parsed.hex, "hex");
-  const provided = Buffer.from(bareDigest, "hex");
-  if (provided.length !== expected.length) return false;
-
-  return timingSafeEqual(provided, expected);
+  return matchDigest(payload, secret, parsed, timestampSeconds) !== null;
 }
 
 /**
@@ -300,6 +318,11 @@ export function isWithinReplayWindow(
  * @param signatureHeader - The `X-SecureFlow-Signature` header value.
  * @param timestampHeader - The `X-SecureFlow-Timestamp` header value.
  * @param replayWindowSeconds - Maximum allowed age (default: 300).
+ * @param options.allowUnboundLegacySignatures - Also admit a legacy digest over
+ *   the bare body. Off by default: such a signature covers no timestamp, so a
+ *   captured request can be replayed indefinitely by refreshing the timestamp
+ *   header. For senders that have not yet moved to v1 or a timestamp-bound
+ *   legacy digest.
  * @returns An admission result with `ok: true` or an error message.
  */
 export function admitWebhookRequest(
@@ -308,6 +331,7 @@ export function admitWebhookRequest(
   signatureHeader: string | null | undefined,
   timestampHeader: string | null | undefined,
   replayWindowSeconds: number = DEFAULT_REPLAY_WINDOW_SECONDS,
+  options: { allowUnboundLegacySignatures?: boolean } = {},
 ): { ok: true; scheme: "v1" | "legacy" } | { ok: false; status: number; message: string } {
   // 1. Signature required
   if (!signatureHeader) {
@@ -348,8 +372,20 @@ export function admitWebhookRequest(
 
   // 5. Verify signature (constant-time)
   const timestampSeconds = Math.floor(timestampMs / 1000);
-  if (!digestMatches(payload, secret, parsed, timestampSeconds)) {
+  const matched = matchDigest(payload, secret, parsed, timestampSeconds);
+  if (!matched) {
     return { ok: false, status: 401, message: "Invalid signature" };
+  }
+
+  // 6. A bare-body legacy digest signs no timestamp. The window in step 3
+  //    checked a header nothing authenticated, so this could be a replay of
+  //    any delivery ever captured.
+  if (matched === "unbound" && !options.allowUnboundLegacySignatures) {
+    return {
+      ok: false,
+      status: 401,
+      message: "Signature does not cover the request timestamp",
+    };
   }
 
   return { ok: true, scheme: parsed.scheme };

@@ -60,14 +60,15 @@ function makeRequest(
     extraHeaders = {},
   }: { secret?: string; extraHeaders?: Record<string, string> } = {},
 ) {
-  const signature = `sha256=${createHmac("sha256", secret).update(body).digest("hex")}`;
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const signature = `sha256=${createHmac("sha256", secret).update(`${timestamp}.${body}`).digest("hex")}`;
 
   return new Request("http://localhost:3000/api/webhooks/generic", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "X-SecureFlow-Signature": signature,
-      "X-SecureFlow-Timestamp": Math.floor(Date.now() / 1000).toString(),
+      "X-SecureFlow-Timestamp": timestamp,
       ...extraHeaders,
     },
     body,
