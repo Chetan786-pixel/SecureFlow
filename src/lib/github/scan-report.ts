@@ -24,6 +24,22 @@ export interface ScanReportFinding {
   promptInjectionSuspected?: boolean;
 }
 
+export interface SuppressedFindingReport {
+  severity: unknown;
+  type: string;
+  fileLocation: string;
+  line?: number;
+  reason: string;
+}
+
+export interface RejectedSuppressionReport {
+  fileLocation: string;
+  line?: number;
+  reason: string;
+  findingType?: string;
+  severity?: unknown;
+}
+
 export interface ScanReportSummaryInput {
   /** The findings to write out in this comment. */
   findings: readonly ScanReportFinding[];
@@ -33,6 +49,10 @@ export interface ScanReportSummaryInput {
   inlineCount: number;
   /** Partial-coverage notice from `formatCoverageNotice`, if any. */
   coverageNotice?: string | null;
+  /** Findings suppressed via inline directives. */
+  suppressedFindings?: readonly SuppressedFindingReport[];
+  /** Inline suppression directives that were rejected or ignored. */
+  rejectedSuppressions?: readonly RejectedSuppressionReport[];
 }
 
 /** Quote every line of `text`, so a multi-paragraph value stays one blockquote. */
@@ -66,6 +86,8 @@ export function renderScanReportSummary({
   totalFindings,
   inlineCount,
   coverageNotice,
+  suppressedFindings = [],
+  rejectedSuppressions = [],
 }: ScanReportSummaryInput): string {
   let body = `### 🛡️ SecureFlow AI Security Report\n\n`;
   body += `⚠️ Detected **${totalFindings}** potential issues matching your code policies. Please review them before merging.\n\n`;
@@ -78,6 +100,14 @@ export function renderScanReportSummary({
     body += `📍 **${inlineCount}** finding(s) are annotated inline on the exact changed lines below.\n\n`;
   }
 
+  if (suppressedFindings.length > 0) {
+    body += `🔕 **${suppressedFindings.length}** finding(s) suppressed via inline directives.\n\n`;
+  }
+
+  if (rejectedSuppressions.length > 0) {
+    body += `⚠️ **${rejectedSuppressions.length}** inline suppression directive(s) rejected or ignored.\n\n`;
+  }
+
   for (const f of findings) {
     body += `#### ${severityBadge(f.severity)} | **${f.type}** in ${toCodeSpan(f.fileLocation)}\n`;
     if (f.promptInjectionSuspected) {
@@ -88,6 +118,24 @@ export function renderScanReportSummary({
     body += `${f.remediation ?? ""}\n\n`;
     body += `</details>\n\n`;
     body += `---\n\n`;
+  }
+
+  if (suppressedFindings.length > 0) {
+    body += `### 🔕 Suppressed Findings (${suppressedFindings.length})\n\n`;
+    for (const s of suppressedFindings) {
+      const loc = s.line ? `${s.fileLocation}:${s.line}` : s.fileLocation;
+      body += `- ${severityBadge(s.severity)} | **${s.type}** in ${toCodeSpan(loc)} — reason: ${s.reason}\n`;
+    }
+    body += `\n`;
+  }
+
+  if (rejectedSuppressions.length > 0) {
+    body += `### ⚠️ Rejected / Ignored Suppressions (${rejectedSuppressions.length})\n\n`;
+    for (const r of rejectedSuppressions) {
+      const loc = r.line ? `${r.fileLocation}:${r.line}` : r.fileLocation;
+      body += `- Directive in ${toCodeSpan(loc)}: ${r.reason}\n`;
+    }
+    body += `\n`;
   }
 
   return body;
