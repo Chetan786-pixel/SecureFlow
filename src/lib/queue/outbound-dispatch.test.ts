@@ -113,6 +113,36 @@ describe("isPrivateIPv6", () => {
   it("allows a public v6 address", () => {
     expect(isPrivateIPv6("2606:2800:220:1:248:1893:25c8:1946")).toBe(false);
   });
+
+  it.each([
+    ["64:ff9b::a9fe:a9fe", "NAT64 of 169.254.169.254"],
+    ["64:ff9b::7f00:1", "NAT64 of 127.0.0.1"],
+    ["64:ff9b::a00:5", "NAT64 of 10.0.0.5"],
+    ["64:ff9b:1::1", "local-use NAT64"],
+    ["2002:a9fe:a9fe::1", "6to4 of 169.254.169.254"],
+    ["2002:c0a8:101::", "6to4 of 192.168.1.1"],
+    ["::ffff:0:7f00:1", "SIIT of 127.0.0.1"],
+    ["::a00:1", "IPv4-compatible 10.0.0.1"],
+    ["2001::1", "Teredo"],
+    ["2001:db8::1", "documentation"],
+    ["fec0::1", "site-local"],
+    ["100::1", "discard-only"],
+  ])("rejects %s (%s), the hextet form DNS and the URL parser produce", (address) => {
+    expect(isPrivateIPv6(address)).toBe(true);
+  });
+
+  it.each(["64:ff9b::808:808", "2002:808:808::1", "::ffff:0:808:808"])(
+    "allows %s, which wraps the public 8.8.8.8",
+    (address) => {
+      expect(isPrivateIPv6(address)).toBe(false);
+    },
+  );
+
+  it("treats a value that does not parse as private", () => {
+    expect(isPrivateIPv6("1::2::3")).toBe(true);
+    expect(isPrivateIPv6("12345::1")).toBe(true);
+    expect(isPrivateIPv6("1:2:3:4:5:6:7")).toBe(true);
+  });
 });
 
 describe("isPrivateAddress", () => {
