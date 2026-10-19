@@ -37,3 +37,29 @@ if grep -Fq 'secureflow-metrics:' <<< "$app_service"; then
   echo 'Application Service must not match the metrics ServiceMonitor' >&2
   exit 1
 fi
+
+for np_enabled in false true; do
+  "$helm_bin" lint "$chart_dir" \
+    --set secrets.authSecret=local-test-only \
+    --set networkPolicy.enabled="$np_enabled"
+  "$helm_bin" template check "$chart_dir" \
+    --set secrets.authSecret=local-test-only \
+    --set networkPolicy.enabled="$np_enabled" > /dev/null
+done
+
+network_policies="$("$helm_bin" template check "$chart_dir" \
+  --show-only templates/networkpolicy.yaml \
+  --set secrets.authSecret=local-test-only \
+  --set networkPolicy.enabled=true)"
+
+grep -Fq 'name: check-secureflow-postgresql' <<< "$network_policies"
+grep -Fq 'name: check-secureflow-redis' <<< "$network_policies"
+grep -Fq 'port: 5432' <<< "$network_policies"
+grep -Fq 'port: 6379' <<< "$network_policies"
+grep -Fq 'app.kubernetes.io/component: postgresql' <<< "$network_policies"
+grep -Fq 'app.kubernetes.io/component: redis' <<< "$network_policies"
+grep -Fq 'values:' <<< "$network_policies"
+grep -Fq -- '- app' <<< "$network_policies"
+grep -Fq -- '- worker' <<< "$network_policies"
+grep -Fq -- '- migration' <<< "$network_policies"
+grep -Fq -- '- retention' <<< "$network_policies"
