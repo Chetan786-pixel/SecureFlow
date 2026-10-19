@@ -8,6 +8,7 @@ import {
   type RateLimitDecision,
 } from "./api-rate-limit-policy";
 import { checkRateLimitDetailed, type FallbackStrategy } from "./redis";
+import { resolveUpstashRestConfig } from "./redis-config";
 
 export interface RateLimiterLike {
   limit(identifier: string): Promise<RateLimitDecision>;
@@ -19,7 +20,14 @@ export type RateLimitScope = "ip" | "user";
  * Whether Upstash REST client is configured.
  */
 function upstashConfigured(): boolean {
-  return Boolean(process.env.UPSTASH_REDIS_REST_URL);
+  // Throws when only one of the URL and token is set, rather than building a
+  // client that fails on every request.
+  return resolveUpstashRestConfig() !== null;
+}
+
+function upstashRedis(): Redis {
+  const { url, token } = resolveUpstashRestConfig()!;
+  return new Redis({ url, token });
 }
 
 /**
@@ -56,7 +64,7 @@ export class RedisApiRateLimiter implements RateLimiterLike {
  */
 export const ratelimit: RateLimiterLike = upstashConfigured()
   ? new Ratelimit({
-      redis: Redis.fromEnv(),
+      redis: upstashRedis(),
       limiter: Ratelimit.slidingWindow(20, "60 s"),
     })
   : new RedisApiRateLimiter({ limit: 20, windowSeconds: 60, keyPrefix: "global" }, "fail-closed");
@@ -68,7 +76,7 @@ const limiters = new Map<string, RateLimiterLike>();
 
 function buildUpstashLimiter(tier: ApiRateLimitTier): Ratelimit {
   return new Ratelimit({
-    redis: Redis.fromEnv(),
+    redis: upstashRedis(),
     limiter: Ratelimit.slidingWindow(tier.limit, `${tier.windowSeconds} s`),
     prefix: tier.keyPrefix,
   });

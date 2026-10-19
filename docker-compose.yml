@@ -29,6 +29,14 @@ services:
       DATABASE_POOL_URL: postgresql://secureflow:secureflow@db:5432/secureflow
     restart: "no"
 
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   app:
     build:
       context: .
@@ -39,6 +47,8 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      redis:
+        condition: service_healthy
     ports:
       - "9002:9002"
     env_file:
@@ -46,6 +56,8 @@ services:
     environment:
       DATABASE_URL: postgresql://secureflow:secureflow@db:5432/secureflow
       DATABASE_POOL_URL: postgresql://secureflow:secureflow@db:5432/secureflow
+      # The queues need Redis in production; use the bundled one unless .env names another.
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
     restart: unless-stopped
 
 volumes:

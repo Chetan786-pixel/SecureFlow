@@ -1,6 +1,5 @@
 import Redis from "ioredis";
-
-const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
+import { resolveQueueRedisUrl } from "@/lib/redis-config";
 
 const redisOptions = {
   maxRetriesPerRequest: null,
@@ -27,7 +26,9 @@ export const redis =
         set: async () => "OK",
         del: async () => 1,
       } as any)
-    : new Redis(redisUrl, redisOptions));
+    : // Throws in production when REDIS_URL is missing or malformed, instead of
+      // quietly connecting to localhost. See `@/lib/redis-config`.
+      new Redis(resolveQueueRedisUrl(), redisOptions));
 
 if (process.env.NODE_ENV !== "production") {
   globalForRedis.queueRedis = redis;
