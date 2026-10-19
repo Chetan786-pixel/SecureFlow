@@ -18,7 +18,10 @@ import prisma from "@/lib/prisma";
 import { sanitizeAuditLogInput } from "@/lib/audit/minimization";
 import { severityBadge } from "@/lib/severity";
 import { App } from "octokit";
-import { getGitHubAppCredentials } from "@/lib/queue/worker";
+// From the side-effect-free helper, not `@/lib/queue/worker`: that module
+// constructs the webhook BullMQ Worker when it is imported, so importing the
+// credentials from it started a queue consumer in whatever process loaded this.
+import { getGitHubAppCredentials } from "@/lib/github/app-auth";
 import { fetchPullRequestFiles } from "@/lib/github/pull-request-files";
 import type { ScanJobData } from "@/lib/queue/scanQueue";
 import { updateScanJobProgress } from "@/lib/queue/scanQueue";
