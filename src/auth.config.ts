@@ -121,9 +121,13 @@ export default {
         (session.user as any).codename = token.codename || "";
         (session.user as any).roles = token.roles || [];
       }
+      // The session object is public: `/api/auth/session` serves it to the
+      // browser and the root layout embeds it in the page for SessionProvider.
+      // The GitHub access and refresh tokens stay in the encrypted JWT, and
+      // server code reads the access token through
+      // `@/lib/github/user-access-token` instead.
       return {
         ...session,
-        accessToken: token?.accessToken,
         error: token?.error,
       };
     },

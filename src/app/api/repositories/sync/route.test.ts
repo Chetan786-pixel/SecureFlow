@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { POST } from "./route";
 import * as authModule from "@/auth";
 import * as syncEngine from "@/lib/github/sync-user-repos";
+import { captureGitHubAccessToken } from "@/lib/github/oauth-token-capture";
 import { checkRateLimitDetailed } from "@/lib/redis";
 import { TIERS } from "@/lib/middleware/rate-limit";
 
@@ -80,9 +81,18 @@ const request = () =>
 const session = (overrides: Record<string, unknown> = {}) =>
   ({
     user: { id: "user-123", githubLogin: "octocat" },
-    accessToken: "gho_secret123",
     ...overrides,
   }) as never;
+
+/**
+ * Resolve `auth()` as NextAuth does: the session callback sees the GitHub
+ * token, the session it returns does not carry it.
+ */
+const signedInWithGitHubToken = (value = session(), githubAccessToken = "gho_secret123") =>
+  vi.mocked(authModule.auth).mockImplementation((async () => {
+    captureGitHubAccessToken(githubAccessToken);
+    return value;
+  }) as never);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -103,7 +113,7 @@ describe("POST /api/repositories/sync route (#634)", () => {
   });
 
   it("triggers syncUserRepositories and returns 200 with result when authenticated", async () => {
-    vi.mocked(authModule.auth).mockResolvedValue(session());
+    signedInWithGitHubToken();
 
     vi.spyOn(syncEngine, "syncUserRepositories").mockResolvedValue({
       synced: 5,

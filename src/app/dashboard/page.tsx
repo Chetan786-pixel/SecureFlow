@@ -1,7 +1,7 @@
 import prisma from "@/lib/prisma";
 import { countDistinctFindings } from "@/lib/dashboard/finding-counts";
 import DashboardClient from "./dashboard-client";
-import { auth } from "@/auth";
+import { getSessionWithGitHubToken } from "@/lib/github/user-access-token";
 import { redirect } from "next/navigation";
 import { getSuppressedFingerprints } from "@/lib/triage/queries";
 import { syncUserRepositories } from "@/lib/github/sync-user-repos";
@@ -14,7 +14,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function OverviewPage() {
-  const session = await auth();
+  const { session, githubAccessToken } = await getSessionWithGitHubToken();
 
   if (!session?.user?.id) {
     redirect("/api/auth/signin");
@@ -34,7 +34,7 @@ export default async function OverviewPage() {
       const syncResult = await syncUserRepositories(
         userId,
         (session.user as any).githubLogin,
-        (session as any).accessToken,
+        githubAccessToken,
       );
       if (syncResult.synced > 0) {
         repoCount = syncResult.synced;

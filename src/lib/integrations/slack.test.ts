@@ -15,6 +15,24 @@ import {
 // Imported separately so parallel changes to the list above do not collide.
 import { escapeSlackText } from "./slack";
 
+// Dispatch connects through `pinnedTransport`, not the global `fetch`. Send it
+// back through `fetch` so the stubs in this file see each request. Pinning is
+// covered in src/lib/queue/outbound-dispatch.test.ts.
+vi.mock("@/lib/queue/outbound-dispatch", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/queue/outbound-dispatch")>();
+  return {
+    ...actual,
+    dispatchOutboundWebhook: (
+      request: Parameters<typeof actual.dispatchOutboundWebhook>[0],
+      options: Parameters<typeof actual.dispatchOutboundWebhook>[1] = {},
+    ) =>
+      actual.dispatchOutboundWebhook(request, {
+        fetchImpl: (url, init) => fetch(url, init),
+        ...options,
+      }),
+  };
+});
+
 describe("assertSlackWebhookUrl", () => {
   it("accepts a valid Slack Incoming Webhook URL", () => {
     const url = assertSlackWebhookUrl("https://hooks.slack.com/services/T000/B000/XXXX");

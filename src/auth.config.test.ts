@@ -89,3 +89,47 @@ describe("auth.config jwt callback", () => {
     expect(result.accessTokenExpires).toBeGreaterThanOrEqual(before + 59000);
   });
 });
+
+describe("auth.config session callback", () => {
+  const sessionCallback = authConfig.callbacks?.session;
+
+  const token = {
+    sub: "user-1",
+    userId: "user-1",
+    codename: "Tokyo",
+    roles: ["USER"],
+    accessToken: "gho_provider_access_token",
+    refreshToken: "ghr_provider_refresh_token",
+    accessTokenExpires: Date.now() + 60_000,
+  };
+
+  const baseSession = () => ({
+    user: { name: "Octo Cat", email: "octo@example.test", image: null },
+    expires: "2027-01-01T00:00:00.000Z",
+  });
+
+  it("keeps GitHub provider tokens out of the session served to the browser", async () => {
+    const result = (await sessionCallback!({ session: baseSession(), token } as any)) as any;
+
+    expect(result).not.toHaveProperty("accessToken");
+    expect(result).not.toHaveProperty("refreshToken");
+    expect(result.user).not.toHaveProperty("accessToken");
+
+    // Checked on the serialized form too, which is what `/api/auth/session`
+    // writes and what the root layout embeds in the page.
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain(token.accessToken);
+    expect(serialized).not.toContain(token.refreshToken);
+  });
+
+  it("still carries the identity fields and the refresh error the UI relies on", async () => {
+    const result = (await sessionCallback!({
+      session: baseSession(),
+      token: { ...token, error: "RefreshAccessTokenError" },
+    } as any)) as any;
+
+    expect(result.user).toMatchObject({ id: "user-1", codename: "Tokyo", roles: ["USER"] });
+    expect(result.error).toBe("RefreshAccessTokenError");
+    expect(result.expires).toBe("2027-01-01T00:00:00.000Z");
+  });
+});

@@ -167,7 +167,9 @@ export async function fetchAudioSummary(
       if (response.status === 429) {
         console.warn("⚠️  [SecureFlow] ElevenLabs rate limit reached (429 Too Many Requests).");
       } else if (response.status === 401) {
-        console.warn("⚠️  [SecureFlow] ElevenLabs authentication failed (401 Unauthorized). Check API key.");
+        console.warn(
+          "⚠️  [SecureFlow] ElevenLabs authentication failed (401 Unauthorized). Check API key.",
+        );
       }
     } catch {
       // Fallback to /api/cli/scan

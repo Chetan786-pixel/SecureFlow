@@ -85,7 +85,8 @@ function hmacHex(secret: string, prefix: string, payload: SignedPayload): string
 
 /** A parsed `X-SecureFlow-Signature` value. */
 export type ParsedSignature =
-  { scheme: "v1"; hex: string; timestampSeconds: number } | { scheme: "legacy"; hex: string };
+  | { scheme: "v1"; hex: string; timestampSeconds: number }
+  | { scheme: "legacy"; hex: string };
 
 /**
  * Sign a payload with the canonical v1 scheme.
@@ -107,15 +108,17 @@ export function signPayloadV1(
 }
 
 /**
- * Sign a payload with the legacy bare-body scheme.
+ * Sign a payload with the legacy scheme.
  *
- * @deprecated Prefer {@link signPayloadV1}. The digest here does not cover a
- *   timestamp, so a captured request stays valid for as long as the receiver's
- *   replay window allows after its `X-SecureFlow-Timestamp` header is rewritten.
- *   Kept for senders already configured against it.
+ * @deprecated Prefer {@link signPayloadV1}. When called without
+ *   `timestampSeconds`, the digest does not cover a timestamp, so a captured
+ *   request stays valid for as long as the receiver's replay window allows
+ *   after its `X-SecureFlow-Timestamp` header is rewritten. Kept for senders
+ *   already configured against it.
  *
  * @param payload - The raw payload string to sign.
  * @param secret - The shared secret key.
+ * @param timestampSeconds - Optional Unix seconds to bind into the legacy digest.
  * @returns The signature in `sha256=<hex>` format.
  */
 export function signPayload(

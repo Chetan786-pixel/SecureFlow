@@ -29,7 +29,7 @@ vi.mock("@/lib/armor/iq", () => ({
 vi.mock("@/ai/flows/developer-receives-ai-security-explanations", () => ({
   developerReceivesAISecurityExplanations: mocks.explain,
 }));
-vi.mock("@/lib/queue/worker", () => ({
+vi.mock("@/lib/github/app-auth", () => ({
   getGitHubAppCredentials: () => ({ appId: "1", privateKey: "key" }),
 }));
 vi.mock("@/lib/queue/scanQueue", () => ({
