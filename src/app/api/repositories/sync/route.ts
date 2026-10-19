@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { getSessionWithGitHubToken } from "@/lib/github/user-access-token";
 import prisma from "@/lib/prisma";
 import { syncUserRepositories } from "@/lib/github/sync-user-repos";
 import { parseSyncTarget, singleRepositorySyncResponse } from "@/lib/github/repo-sync-request";
@@ -61,7 +61,7 @@ const NO_STORE = { "Cache-Control": "no-store" } as const;
 const GENERIC_FAILURE = "Failed to synchronize repositories";
 
 async function handler(request: NextRequest) {
-  const session = await auth();
+  const { session, githubAccessToken } = await getSessionWithGitHubToken();
 
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: NO_STORE });
@@ -151,7 +151,7 @@ async function handler(request: NextRequest) {
     const result = await syncUserRepositories(
       userId,
       (session.user as { githubLogin?: string | null }).githubLogin,
-      (session as { accessToken?: string | null }).accessToken,
+      githubAccessToken,
     );
 
     log.info("Repository sync completed", {

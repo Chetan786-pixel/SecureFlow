@@ -8,8 +8,8 @@ declare module "next-auth" {
       codename?: string | null;
       roles?: string[];
     } & DefaultSession["user"];
-    /** GitHub OAuth access token, refreshed on read. Server-side use only. */
-    accessToken?: string | null;
+    // No provider tokens here: the session is served to the browser. Server
+    // code gets the GitHub token from `getSessionWithGitHubToken`.
     /** Set to "RefreshAccessTokenError" when the token refresh failed. */
     error?: string | null;
   }

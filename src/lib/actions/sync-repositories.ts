@@ -1,11 +1,11 @@
 "use server";
 
-import { auth } from "@/auth";
+import { getSessionWithGitHubToken } from "@/lib/github/user-access-token";
 import { syncUserRepositories, SyncUserReposResult } from "@/lib/github/sync-user-repos";
 import { revalidatePath } from "next/cache";
 
 export async function triggerRepositorySync(): Promise<SyncUserReposResult> {
-  const session = await auth();
+  const { session, githubAccessToken } = await getSessionWithGitHubToken();
 
   if (!session?.user?.id) {
     return {
@@ -18,7 +18,7 @@ export async function triggerRepositorySync(): Promise<SyncUserReposResult> {
   const result = await syncUserRepositories(
     session.user.id,
     (session.user as any).githubLogin,
-    (session as any).accessToken,
+    githubAccessToken,
   );
 
   revalidatePath("/dashboard");
