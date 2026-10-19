@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createHmac } from "crypto";
 
 // ---- Mocks ----
@@ -170,5 +170,37 @@ describe("/api/webhooks (generic webhook route)", () => {
 
     const res = await POST(req as any);
     expect(res.status).toBe(400);
+  });
+
+  describe("body size cap (WEBHOOK_MAX_BYTES)", () => {
+    afterEach(() => {
+      delete process.env.WEBHOOK_MAX_BYTES;
+    });
+
+    it("refuses a correctly signed body over the configured cap with 413", async () => {
+      process.env.WEBHOOK_MAX_BYTES = "256";
+      const payload = JSON.stringify({ event: "alert", padding: "x".repeat(512) });
+
+      const res = await POST(makeRequest(payload) as any);
+
+      expect(res.status).toBe(413);
+    });
+
+    it("refuses a body whose Content-Length is over the cap before reading it", async () => {
+      process.env.WEBHOOK_MAX_BYTES = "256";
+      const payload = JSON.stringify({ event: "ping" });
+
+      const res = await POST(makeRequest(payload, { "content-length": "100000" }) as any);
+
+      expect(res.status).toBe(413);
+    });
+
+    it("still accepts a signed body under the cap", async () => {
+      process.env.WEBHOOK_MAX_BYTES = "256";
+
+      const res = await POST(makeRequest(JSON.stringify({ event: "ping" })) as any);
+
+      expect(res.status).toBe(200);
+    });
   });
 });
