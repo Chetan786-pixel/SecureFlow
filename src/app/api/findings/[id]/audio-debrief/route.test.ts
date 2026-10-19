@@ -374,9 +374,12 @@ describe("/api/findings/[id]/audio-debrief", () => {
     getCachedAudioMock.mockResolvedValueOnce(null);
     fetchElevenLabsMock.mockResolvedValueOnce(null);
 
-    const req = new NextRequest("http://localhost:3000/api/findings/f-upstream-fail/audio-debrief", {
-      headers: { accept: "application/json" },
-    });
+    const req = new NextRequest(
+      "http://localhost:3000/api/findings/f-upstream-fail/audio-debrief",
+      {
+        headers: { accept: "application/json" },
+      },
+    );
     const res = await GET(req, { params: Promise.resolve({ id: "f-upstream-fail" }) });
 
     expect(res.status).toBe(502);
@@ -400,7 +403,9 @@ describe("/api/findings/[id]/audio-debrief", () => {
     });
     getCachedAudioMock.mockResolvedValueOnce(Buffer.from("audio"));
 
-    const req = new NextRequest("http://localhost:3000/api/findings/f-cache-key-test/audio-debrief");
+    const req = new NextRequest(
+      "http://localhost:3000/api/findings/f-cache-key-test/audio-debrief",
+    );
     await GET(req, { params: Promise.resolve({ id: "f-cache-key-test" }) });
 
     expect(getCacheKeyMock).toHaveBeenCalledWith(
