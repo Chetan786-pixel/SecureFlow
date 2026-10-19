@@ -6,7 +6,13 @@ vi.mock("child_process", () => ({
   execFileSync: (...args: unknown[]) => execFileSyncMock(...args),
 }));
 
-import { GitError, isGitRepository, getStagedFiles, readStagedContent } from "./git.js";
+import {
+  GitError,
+  isGitRepository,
+  getStagedFiles,
+  readStagedContent,
+  getCurrentBranch,
+} from "./git.js";
 
 describe("cli/src/git", () => {
   beforeEach(() => {
@@ -161,6 +167,55 @@ describe("cli/src/git", () => {
       const content = readStagedContent("binary.png");
 
       expect(content).toBeNull();
+    });
+  });
+
+  describe("getCurrentBranch", () => {
+    it("returns active branch name when git rev-parse --abbrev-ref HEAD succeeds", () => {
+      execFileSyncMock.mockReturnValue("main\n");
+
+      const branch = getCurrentBranch();
+
+      expect(branch).toBe("main");
+      expect(execFileSyncMock).toHaveBeenCalledWith(
+        "git",
+        ["rev-parse", "--abbrev-ref", "HEAD"],
+        expect.any(Object),
+      );
+    });
+
+    it("returns feature branch name with slashes and special characters", () => {
+      execFileSyncMock.mockReturnValue("feat/user-auth-123\n");
+
+      const branch = getCurrentBranch();
+
+      expect(branch).toBe("feat/user-auth-123");
+    });
+
+    it("returns null when in detached HEAD state (output is HEAD)", () => {
+      execFileSyncMock.mockReturnValue("HEAD\n");
+
+      const branch = getCurrentBranch();
+
+      expect(branch).toBeNull();
+    });
+
+    it("returns null when output is empty string", () => {
+      execFileSyncMock.mockReturnValue("\n");
+
+      const branch = getCurrentBranch();
+
+      expect(branch).toBeNull();
+    });
+
+    it("returns null when git command throws or executed outside repository", () => {
+      execFileSyncMock.mockImplementation(() => {
+        throw new Error("fatal: not a git repository");
+      });
+
+      const branch = getCurrentBranch();
+
+      expect(branch).toBeNull();
     });
   });
 });
