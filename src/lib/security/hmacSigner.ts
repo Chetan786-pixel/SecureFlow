@@ -85,8 +85,7 @@ function hmacHex(secret: string, prefix: string, payload: SignedPayload): string
 
 /** A parsed `X-SecureFlow-Signature` value. */
 export type ParsedSignature =
-  | { scheme: "v1"; hex: string; timestampSeconds: number }
-  | { scheme: "legacy"; hex: string };
+  { scheme: "v1"; hex: string; timestampSeconds: number } | { scheme: "legacy"; hex: string };
 
 /**
  * Sign a payload with the canonical v1 scheme.
