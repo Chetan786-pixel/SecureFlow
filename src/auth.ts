@@ -3,6 +3,7 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import prisma from "@/lib/prisma";
 import authConfig from "./auth.config";
 import { isMockAuthEnabled } from "@/lib/mock-auth";
+import { captureGitHubAccessToken } from "@/lib/github/oauth-token-capture";
 
 const CITIES = [
   "Tokyo",
@@ -77,6 +78,13 @@ const nextAuthResult = NextAuth({
       } catch {}
 
       return `${baseUrl}/dashboard`;
+    },
+    async session(params: any) {
+      // The provider token goes to a server-side caller that asked for it via
+      // `getSessionWithGitHubToken`, and never into the returned session,
+      // which is public. See `@/lib/github/oauth-token-capture`.
+      captureGitHubAccessToken(params.token?.accessToken);
+      return authConfig.callbacks.session(params);
     },
     async jwt(params: any) {
       const { token, user, account, trigger } = params;

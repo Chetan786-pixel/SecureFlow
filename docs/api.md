@@ -55,10 +55,14 @@ interface Session {
     codename: string; // Heist-themed codename (e.g. "Tokyo")
     roles: string[]; // e.g. ["USER"] or ["USER", "ADMIN"]
   };
-  accessToken: string; // GitHub OAuth access token
   error?: "RefreshAccessTokenError";
 }
 ```
+
+The session is served to the browser, so it carries no provider credentials.
+The GitHub OAuth access and refresh tokens stay in the encrypted session
+cookie; server code that needs to call GitHub as the user reads the access
+token with `getSessionWithGitHubToken()` from `@/lib/github/user-access-token`.
 
 ### Roles
 
@@ -166,7 +170,6 @@ This is the catch-all NextAuth route. It handles the OAuth dance with GitHub, JW
     "codename": "Tokyo",
     "roles": ["USER"]
   },
-  "accessToken": "gho_abcdef...",
   "expires": "2026-01-31T12:34:56.000Z"
 }
 ```
