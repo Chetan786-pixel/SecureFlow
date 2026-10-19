@@ -668,6 +668,12 @@ Required across the API surface:
 | `UPSTASH_REDIS_REST_URL`   | `withRateLimit`          | (Optional) Upstash Redis for distributed rate limiting. |
 | `UPSTASH_REDIS_REST_TOKEN` | `withRateLimit`          | (Optional) Upstash Redis token.                         |
 
+The generic webhook routes refuse a legacy `sha256=` signature computed over the
+bare body, because it signs no timestamp and can be replayed indefinitely. Send a
+v1 signature (`t=<unix>,v1=<hex>`) or a legacy digest over `<unix>.<body>`. For
+senders that cannot change yet, `WEBHOOK_ALLOW_UNBOUND_LEGACY_SIGNATURES=true`
+accepts the bare-body form again.
+
 ---
 
 ## Changelog

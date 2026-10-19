@@ -4,7 +4,8 @@
  * Wraps a Next.js route handler to enforce:
  * 1. A cap on the body size, checked before the body is buffered
  * 2. HMAC-SHA256 signature verification
- * 3. Timestamp-based replay protection (5-minute window)
+ * 3. Timestamp-based replay protection (5-minute window), with the timestamp
+ *    covered by the signature
  *
  * This module is the only caller of `admitWebhookRequest`, so it is where the
  * policy decisions live -- in particular the refusal to run at all without a
@@ -56,6 +57,13 @@ export interface WebhookGuardOptions {
    * Like `secret`, read once per request, so it may be a getter.
    */
   maxBodyBytes?: number;
+  /**
+   * Also admit a legacy `sha256=` digest over the bare body (default: false).
+   * Such a signature covers no timestamp, so a captured request can be
+   * replayed indefinitely. Only for senders that cannot yet send v1 or a
+   * timestamp-bound digest. Read once per request, so it may be a getter.
+   */
+  allowUnboundLegacySignatures?: boolean;
   /** Custom error handler. */
   onError?: (error: { status: number; message: string }) => NextResponse;
 }
@@ -185,6 +193,7 @@ export function withWebhookGuard(
       req.headers.get(signatureHeader),
       req.headers.get(timestampHeader),
       replayWindowSeconds,
+      { allowUnboundLegacySignatures: options.allowUnboundLegacySignatures === true },
     );
 
     if (!result.ok) {
@@ -256,6 +265,7 @@ export async function verifyWebhookRequest(
     timestampHeader?: string;
     replayWindowSeconds?: number;
     maxBodyBytes?: number;
+    allowUnboundLegacySignatures?: boolean;
   },
 ): Promise<WebhookVerification> {
   const reject = (error: { status: number; message: string }): WebhookVerification => ({
@@ -278,6 +288,7 @@ export async function verifyWebhookRequest(
     req.headers.get(options?.signatureHeader ?? SIGNATURE_HEADER),
     req.headers.get(options?.timestampHeader ?? TIMESTAMP_HEADER),
     options?.replayWindowSeconds,
+    { allowUnboundLegacySignatures: options?.allowUnboundLegacySignatures === true },
   );
 
   if (!result.ok) return reject(result);

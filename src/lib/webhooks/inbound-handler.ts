@@ -183,6 +183,11 @@ export function createInboundWebhookHandler(config: InboundWebhookConfig) {
         get maxBodyBytes() {
           return resolveMaxWebhookBodyBytes(process.env.WEBHOOK_MAX_BYTES);
         },
+        // Migration switch for senders still signing the bare body. Off unless
+        // explicitly "true"; see `allowUnboundLegacySignatures`.
+        get allowUnboundLegacySignatures() {
+          return process.env.WEBHOOK_ALLOW_UNBOUND_LEGACY_SIGNATURES?.trim() === "true";
+        },
       },
     ),
   );

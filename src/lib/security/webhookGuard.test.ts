@@ -31,7 +31,7 @@ function makeRequest(
   const headers: Record<string, string> = { "Content-Type": "application/json" };
 
   if (!omit.includes("signature")) {
-    headers[SIGNATURE_HEADER] = signature ?? signPayload(body, secret);
+    headers[SIGNATURE_HEADER] = signature ?? signPayload(body, secret, timestampSeconds);
   }
   if (!omit.includes("timestamp")) {
     headers[TIMESTAMP_HEADER] = String(timestampSeconds);
@@ -291,11 +291,12 @@ describe("verifyWebhookRequest", () => {
 
   it("honours custom header names", async () => {
     const body = "{}";
+    const ts = Math.floor(Date.now() / 1000);
     const req = new NextRequest("https://securefl.ow/api/webhooks", {
       method: "POST",
       headers: {
-        "X-Vendor-Signature": signPayload(body, SECRET),
-        "X-Vendor-Timestamp": String(Math.floor(Date.now() / 1000)),
+        "X-Vendor-Signature": signPayload(body, SECRET, ts),
+        "X-Vendor-Timestamp": String(ts),
       },
       body,
     });
@@ -542,4 +543,60 @@ describe("resolveMaxWebhookBodyBytes", () => {
       expect(resolveMaxWebhookBodyBytes(raw)).toBe(DEFAULT_MAX_WEBHOOK_BODY_BYTES);
     },
   );
+});
+
+describe("withWebhookGuard — timestamp binding", () => {
+  it("refuses a bare-body legacy signature by default", async () => {
+    const body = JSON.stringify({ event: "ping" });
+    const { handler } = recordingHandler();
+
+    const res = await withWebhookGuard(handler, { secret: SECRET })(
+      makeRequest(body, { signature: signPayload(body, SECRET) }),
+    );
+
+    expect(res.status).toBe(401);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("admits a bare-body legacy signature when the route opts in", async () => {
+    const body = JSON.stringify({ event: "ping" });
+    const { handler, calls } = recordingHandler();
+
+    const res = await withWebhookGuard(handler, {
+      secret: SECRET,
+      allowUnboundLegacySignatures: true,
+    })(makeRequest(body, { signature: signPayload(body, SECRET) }));
+
+    expect(res.status).toBe(200);
+    expect(calls).toEqual([body]);
+  });
+
+  it("reads the opt-in per request", async () => {
+    let allow = true;
+    const body = "{}";
+    const guarded = withWebhookGuard(recordingHandler().handler, {
+      secret: SECRET,
+      get allowUnboundLegacySignatures() {
+        return allow;
+      },
+    });
+
+    expect(
+      (await guarded(makeRequest(body, { signature: signPayload(body, SECRET) }))).status,
+    ).toBe(200);
+    allow = false;
+    expect(
+      (await guarded(makeRequest(body, { signature: signPayload(body, SECRET) }))).status,
+    ).toBe(401);
+  });
+
+  it("applies the same rule in verifyWebhookRequest", async () => {
+    const body = "{}";
+    const bare = () => makeRequest(body, { signature: signPayload(body, SECRET) });
+
+    expect((await verifyWebhookRequest(bare(), SECRET)).ok).toBe(false);
+    expect(
+      (await verifyWebhookRequest(bare(), SECRET, { allowUnboundLegacySignatures: true })).ok,
+    ).toBe(true);
+  });
 });
