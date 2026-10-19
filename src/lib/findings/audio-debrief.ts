@@ -60,10 +60,15 @@ export function generateAuditoryBrief(input: AuditoryBriefInput): string {
 }
 
 /**
- * Generates a cache key for the audio debrief based on finding ID and speech text hash.
+ * Generates a cache key for the audio debrief based on finding ID, speech text, and remediation hash.
  */
-export function getAudioDebriefCacheKey(findingId: string, text: string): string {
-  const textHash = createHash("sha256").update(text.trim()).digest("hex").slice(0, 16);
+export function getAudioDebriefCacheKey(
+  findingId: string,
+  text: string,
+  remediation?: string | null,
+): string {
+  const content = remediation ? `${text.trim()}:${remediation.trim()}` : text.trim();
+  const textHash = createHash("sha256").update(content).digest("hex").slice(0, 16);
   return `audio-debrief:v1:${findingId}:${textHash}`;
 }
 
