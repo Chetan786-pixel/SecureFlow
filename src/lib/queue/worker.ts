@@ -949,6 +949,8 @@ export const worker = new Worker<WebhookJobData>(
                 totalFindings: enrichedFindings.length,
                 inlineCount: inlineComments.length,
                 coverageNotice,
+                suppressedFindings: scanner.lastSuppressionResult?.suppressedFindings,
+                rejectedSuppressions: scanner.lastSuppressionResult?.rejectedSuppressions,
               });
 
             // Try to post the anchored findings as an inline review. If that fails
