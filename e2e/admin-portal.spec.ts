@@ -115,7 +115,7 @@ authenticatedTest.describe("Admin Portal Management & Observability (#1332)", ()
       // Verify Dead-Letter Queue section and controls
       await expect(page.getByRole("heading", { name: "Dead-Letter Queue (DLQ)" })).toBeVisible();
       await expect(
-        page.getByPlaceholderText("Filter DLQ jobs by repo, event, action..."),
+        page.getByPlaceholder("Filter DLQ jobs by repo, event, action..."),
       ).toBeVisible();
     },
   );

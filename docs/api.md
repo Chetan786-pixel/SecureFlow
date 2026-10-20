@@ -16,6 +16,9 @@ This document describes every HTTP route exposed under `src/app/api/`, including
    - [GitHub Webhook — `POST /api/webhooks/github`](#3-github-webhook--apiwebhooksgithub)
    - [Finding Explanation Stream — `GET /api/findings/[id]/explain-stream`](#4-finding-explanation-stream--apifindingsidexplain-stream)
    - [Heist OG Image — `GET /api/og/heist`](#5-heist-og-image--apiogheist)
+   - [Asynchronous SBOM Scan — `POST /api/sbom/scan`](#6-asynchronous-sbom-scan--apisbomscan)
+   - [SBOM Scan Status — `GET /api/sbom/scan/status/[jobId]`](#7-sbom-scan-status--apisbomscanstatusjobid)
+   - [Real-Time Voice Alerts Stream — `GET /api/voice-alerts/stream`](#8-real-time-voice-alerts-stream--apivoice-alertsstream)
 6. [Type Reference](#type-reference)
 
 ---
@@ -102,10 +105,12 @@ Retry-After: <windowSeconds>
 }
 ```
 
-| Route                       | Limit | Window |
-| --------------------------- | ----- | ------ |
-| `POST /api/auth/*`          | 10    | 60s    |
-| `POST /api/webhooks/github` | 50    | 60s    |
+| Route                               | Limit               | Window |
+| ----------------------------------- | ------------------- | ------ |
+| `POST /api/auth/*`                  | 10                  | 60s    |
+| `POST /api/webhooks/github`         | 50                  | 60s    |
+| `POST /api/sbom/scan`               | 20 (IP) / 10 (User) | 60s    |
+| `GET /api/sbom/scan/status/[jobId]` | 120                 | 60s    |
 
 All other routes have no explicit rate limit (Next.js / Vercel platform limits still apply).
 
@@ -561,6 +566,360 @@ _(Plain text, not JSON.)_
 
 ---
 
+### 6. Asynchronous SBOM Scan — `/api/sbom/scan`
+
+**File**: `src/app/api/sbom/scan/route.ts`
+
+Enqueues an asynchronous Software Bill of Materials (SBOM) dependency vulnerability scan. Accepts manifest file contents (`package.json`, `requirements.txt`, `bom.json`, `sbom.json`, or CycloneDX/SPDX JSON files) and delegates dependency parsing and vulnerability matching (via the OSV database) to a background BullMQ queue (`sbom-scans`).
+
+Returns immediately with HTTP `202 Accepted` and a polling handle.
+
+#### Request
+
+```http
+POST /api/sbom/scan
+Content-Type: application/json
+Content-Length: 142
+Cookie: next-auth.session-token=<jwt>
+
+{
+  "fileName": "package.json",
+  "content": "{\n  \"dependencies\": {\n    \"lodash\": \"4.17.19\"\n  }\n}",
+  "repositoryId": "cld1a2b3c4d5e6f7g8h9i0j1"
+}
+```
+
+**Auth**: Requires an authenticated session via NextAuth.js. If an optional `repositoryId` is provided, the authenticated user must own the repository.
+**Rate limit**: `TIERS.SCAN` (20 req / 60s per IP) and inner user guard `TIERS.SCAN_USER` (10 req / 60s per user).
+**Payload caps**: Request body capped at `1,114,112` bytes (1 MB manifest + 64 KB JSON envelope). `content` string capped at `1,048,576` bytes (1 MB).
+**Supported manifest file names**:
+
+- `package.json` (npm ecosystem)
+- `requirements.txt` (PyPI ecosystem)
+- `bom.json` / `sbom.json` (CycloneDX / SPDX SBOM JSON formats)
+- Files with `.cdx.json` or `.spdx.json` suffixes
+
+#### Request body schema
+
+```ts
+interface SbomScanRequestBody {
+  fileName: string; // Required. Must be a supported manifest. Path traversal ('..' or leading '/') is blocked.
+  content: string; // Required. Manifest content as raw text (max 1 MB).
+  repositoryId?: string; // Optional. CUID of a repository owned by the session user.
+}
+```
+
+#### Responses
+
+**202 Accepted** — Scan job enqueued successfully:
+
+```http
+HTTP/1.1 202 Accepted
+Content-Type: application/json
+Cache-Control: no-store
+
+{
+  "status": "queued",
+  "jobId": "sbom-cld9876543210zyxwvutsrqp",
+  "scanJobId": "cld9876543210zyxwvutsrqp",
+  "message": "SBOM scan job enqueued successfully",
+  "pollingUrl": "/api/sbom/scan/status/cld9876543210zyxwvutsrqp"
+}
+```
+
+**400 Bad Request** — Missing required fields, path traversal in `fileName`, or unsupported manifest:
+
+```json
+{
+  "error": "BAD_REQUEST",
+  "message": "fileName must be a supported manifest (package.json, requirements.txt, bom.json, sbom.json)"
+}
+```
+
+**401 Unauthorized** — Missing or invalid session:
+
+```json
+{
+  "error": "UNAUTHORIZED",
+  "message": "Unauthorized"
+}
+```
+
+**404 Not Found** — Caller-supplied `repositoryId` does not exist or is not owned by the session user:
+
+```json
+{
+  "error": "NOT_FOUND",
+  "message": "Repository not found"
+}
+```
+
+**413 Payload Too Large** — Payload exceeds maximum allowable size:
+
+```json
+{
+  "error": "PAYLOAD_TOO_LARGE",
+  "message": "Manifest file exceeds maximum allowed size of 1048576 bytes (1MB)"
+}
+```
+
+**429 Too Many Requests** — Rate limit exceeded:
+
+```http
+HTTP/1.1 429 Too Many Requests
+Retry-After: 35
+
+{
+  "error": "Too Many Requests",
+  "message": "You have exceeded the rate limit. Please try again later."
+}
+```
+
+---
+
+### 7. SBOM Scan Status — `/api/sbom/scan/status/[jobId]`
+
+**File**: `src/app/api/sbom/scan/status/[jobId]/route.ts`
+
+Polls the progress and retrieves results for an asynchronous SBOM scan job previously enqueued via `POST /api/sbom/scan`.
+
+#### Request
+
+```http
+GET /api/sbom/scan/status/cld9876543210zyxwvutsrqp
+Cookie: next-auth.session-token=<jwt>
+```
+
+With pagination for large dependency manifests:
+
+```http
+GET /api/sbom/scan/status/cld9876543210zyxwvutsrqp?page=1&pageSize=50
+Cookie: next-auth.session-token=<jwt>
+```
+
+**Auth**: Requires an authenticated session. The scan job must either belong to a repository owned by the user, or have an enqueuing audit entry initiated by the user. If unauthorized, returns `404 Not Found` (rather than 403) to prevent scan existence enumeration.
+**Rate limit**: `TIERS.STANDARD` (120 req / 60s).
+**Runtime**: `force-dynamic`.
+
+#### Path parameters
+
+| Name    | Type   | Description                                       |
+| ------- | ------ | ------------------------------------------------- |
+| `jobId` | string | The `scanJobId` returned when enqueuing the scan. |
+
+#### Query parameters
+
+| Name       | Type   | Required | Default | Description                                         |
+| ---------- | ------ | -------- | ------- | --------------------------------------------------- |
+| `page`     | number | no       | `1`     | Page number for paginated package listings (min 1). |
+| `pageSize` | number | no       | `50`    | Items per page (min 1, max 100).                    |
+
+#### Responses
+
+**200 OK (Job in Progress — PENDING / PROCESSING)**:
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+Cache-Control: no-store, no-cache, must-revalidate
+Pragma: no-cache
+
+{
+  "scanJobId": "cld9876543210zyxwvutsrqp",
+  "status": "PENDING",
+  "totalFiles": 1,
+  "scannedFiles": 0,
+  "vulnerabilitiesFound": 0,
+  "result": null,
+  "error": null,
+  "queuedAt": "2026-10-20T17:00:00.000Z",
+  "startedAt": null,
+  "completedAt": null
+}
+```
+
+**200 OK (Job Completed with Vulnerabilities)**:
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+Cache-Control: no-store, no-cache, must-revalidate
+
+{
+  "scanJobId": "cld9876543210zyxwvutsrqp",
+  "status": "COMPLETED",
+  "totalFiles": 1,
+  "scannedFiles": 1,
+  "vulnerabilitiesFound": 1,
+  "result": {
+    "scanId": "cld9876543210zyxwvutsrqp",
+    "timestamp": "2026-10-20T17:00:04.123Z",
+    "totalDependencies": 1,
+    "vulnerabilities": [
+      {
+        "dependency": {
+          "name": "lodash",
+          "version": "4.17.19",
+          "manifestFile": "package.json",
+          "ecosystem": "npm"
+        },
+        "cveId": "CVE-2020-8203",
+        "severity": "HIGH",
+        "description": "Prototype pollution in lodash",
+        "patchedVersion": "4.17.21"
+      }
+    ],
+    "status": "VULNERABLE"
+  },
+  "error": null,
+  "queuedAt": "2026-10-20T17:00:00.000Z",
+  "startedAt": "2026-10-20T17:00:01.000Z",
+  "completedAt": "2026-10-20T17:00:04.123Z"
+}
+```
+
+**200 OK (Job Completed with Pagination Metadata)**:
+
+When `page` or `pageSize` is requested and packages exist in the scan result:
+
+```json
+{
+  "scanJobId": "cld9876543210zyxwvutsrqp",
+  "status": "COMPLETED",
+  "totalFiles": 1,
+  "scannedFiles": 1,
+  "vulnerabilitiesFound": 0,
+  "result": {
+    "scanId": "cld9876543210zyxwvutsrqp",
+    "timestamp": "2026-10-20T17:00:04.123Z",
+    "totalDependencies": 25,
+    "packages": [
+      {
+        "name": "react",
+        "version": "18.3.1",
+        "manifestFile": "package.json",
+        "ecosystem": "npm"
+      }
+    ],
+    "vulnerabilities": [],
+    "status": "CLEAN"
+  },
+  "pagination": {
+    "page": 1,
+    "pageSize": 50,
+    "totalPackages": 25,
+    "totalPages": 1
+  },
+  "error": null,
+  "queuedAt": "2026-10-20T17:00:00.000Z",
+  "startedAt": "2026-10-20T17:00:01.000Z",
+  "completedAt": "2026-10-20T17:00:04.123Z"
+}
+```
+
+**400 Bad Request** — Missing or invalid `jobId`.
+
+**401 Unauthorized** — Missing session.
+
+**404 Not Found** — Scan job does not exist, or caller does not have authorization to view it.
+
+---
+
+### 8. Real-Time Voice Alerts Stream — `/api/voice-alerts/stream`
+
+**File**: `src/app/api/voice-alerts/stream/route.ts`
+
+Authenticated Server-Sent Events (SSE) endpoint providing real-time voice alerts (#1307). As background workers complete Pull Request scans that result in `BLOCK` decisions or `CRITICAL`/`HIGH` findings, events are published over user-isolated Redis channels (`voice-alert:${userId}`) and streamed directly to the connected browser session.
+
+#### Request
+
+```http
+GET /api/voice-alerts/stream
+Cookie: next-auth.session-token=<jwt>
+Accept: text/event-stream
+```
+
+**Auth**: Requires an authenticated session via NextAuth.js (`401 Unauthorized` if not signed in).
+**Opt-In Check**: Verifies `user.voiceAlertsEnabled` in PostgreSQL. If disabled or false, the server returns `204 No Content` immediately, informing the client not to establish an open stream or retry connections.
+**Tenant Isolation**: Redis Pub/Sub subscription is keyed strictly by `userId` (`voice-alert:${userId}`), ensuring alerts never leak across accounts.
+**Runtime**: `force-dynamic`.
+
+#### Responses
+
+**204 No Content** — User has not enabled voice alerts in account settings:
+
+```http
+HTTP/1.1 204 No Content
+```
+
+**200 OK** — Live Server-Sent Events stream:
+
+```http
+HTTP/1.1 200 OK
+Content-Type: text/event-stream
+Cache-Control: no-cache, no-transform
+Connection: keep-alive
+X-Accel-Buffering: no
+```
+
+#### SSE Stream Frames
+
+Stream frames use standard `data: <json>\n\n` formatting.
+
+1. **Connection Heartbeat Frame** (emitted immediately on connection open):
+
+```json
+{ "type": "connected" }
+```
+
+2. **Voice Alert Event Frame**:
+
+```json
+{
+  "type": "voice-alert",
+  "repositoryFullName": "octocat/defense-api",
+  "prNumber": 42,
+  "decision": "BLOCK",
+  "topSeverity": "CRITICAL",
+  "alertId": "cld-delivery-uuid-98765"
+}
+```
+
+| Field                | Type                   | Description                                                                                                                |
+| -------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `type`               | `"voice-alert"`        | Event type identifier.                                                                                                     |
+| `repositoryFullName` | `string`               | Repository full name (`"owner/repo"`) as reported by GitHub.                                                               |
+| `prNumber`           | `number`               | Pull request number triggering the scan.                                                                                   |
+| `decision`           | `"BLOCK" \| "REVIEW"`  | Policy decision causing the alert.                                                                                         |
+| `topSeverity`        | `"CRITICAL" \| "HIGH"` | Highest finding severity detected in the scan.                                                                             |
+| `alertId`            | `string`               | Unique deduplication key (webhook delivery ID) ensuring background worker retries do not trigger duplicate audio playback. |
+
+#### Client Consumption Example
+
+```ts
+const eventSource = new EventSource("/api/voice-alerts/stream", {
+  withCredentials: true,
+});
+
+eventSource.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  if (data.type === "connected") {
+    console.log("Connected to voice alerts real-time stream");
+  } else if (data.type === "voice-alert") {
+    console.log(`Voice alert for ${data.repositoryFullName} PR #${data.prNumber}:`, data);
+    const audioUrl = `/api/voice-alerts/audio?repo=${encodeURIComponent(data.repositoryFullName)}&decision=${data.decision}&severity=${data.topSeverity}`;
+    const audio = new Audio(audioUrl);
+    audio.play().catch(console.warn);
+  }
+};
+
+eventSource.onerror = (err) => {
+  console.warn("Voice alert stream disconnected:", err);
+};
+```
+
+---
+
 ## Type Reference
 
 These are the persisted data shapes referenced throughout the routes above. All are defined in `prisma/schema.prisma`.
@@ -637,6 +996,67 @@ These are the persisted data shapes referenced throughout the routes above. All 
 }
 ```
 
+### `ScanJob`
+
+```ts
+{
+  id: string; // CUID
+  repositoryId: string | null;
+  pullRequestId: string | null;
+  status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
+  totalFiles: number;
+  scannedFiles: number;
+  vulnerabilitiesFound: number;
+  error: string | null;
+  queuedAt: string; // ISO timestamp
+  startedAt: string | null;
+  completedAt: string | null;
+}
+```
+
+### `SbomScanResult`
+
+```ts
+{
+  scanId: string;
+  timestamp: string; // ISO timestamp
+  totalDependencies: number;
+  vulnerabilities: VulnerabilityMatch[];
+  status: "CLEAN" | "WARNING" | "VULNERABLE" | "ERROR";
+}
+```
+
+### `VulnerabilityMatch` & `Dependency`
+
+```ts
+interface Dependency {
+  name: string;
+  version: string;
+  manifestFile: string;
+  ecosystem: "npm" | "pypi" | "maven" | "gem";
+}
+
+interface VulnerabilityMatch {
+  dependency: Dependency;
+  cveId: string;
+  severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  description: string;
+  patchedVersion: string | null;
+}
+```
+
+### `VoiceAlertEvent`
+
+```ts
+{
+  repositoryFullName: string;
+  prNumber: number;
+  decision: "BLOCK" | "REVIEW";
+  topSeverity: "CRITICAL" | "HIGH";
+  alertId: string;
+}
+```
+
 ### `WebhookEvent`
 
 ```ts
@@ -655,18 +1075,22 @@ These are the persisted data shapes referenced throughout the routes above. All 
 
 Required across the API surface:
 
-| Variable                   | Used by                  | Purpose                                                 |
-| -------------------------- | ------------------------ | ------------------------------------------------------- |
-| `GITHUB_CLIENT_ID`         | `/api/auth/*`            | GitHub OAuth client ID.                                 |
-| `GITHUB_CLIENT_SECRET`     | `/api/auth/*`            | GitHub OAuth client secret.                             |
-| `GITHUB_APP_ID`            | `/api/webhooks/github`   | SecureFlow GitHub App ID.                               |
-| `GITHUB_PRIVATE_KEY`       | `/api/webhooks/github`   | App PEM private key (`\n`-escaped).                     |
-| `GITHUB_WEBHOOK_SECRET`    | `/api/webhooks/github`   | HMAC secret for webhook signature verification.         |
-| `WEBHOOK_MAX_BYTES`        | Generic webhook routes   | (Optional) Body cap in bytes; default 1 MiB.            |
-| `NEXT_PUBLIC_APP_URL`      | `/share/heist` (OG meta) | Public origin for absolute OG image URLs.               |
-| `DATABASE_URL`             | All DB-backed routes     | Postgres connection string.                             |
-| `UPSTASH_REDIS_REST_URL`   | `withRateLimit`          | (Optional) Upstash Redis for distributed rate limiting. |
-| `UPSTASH_REDIS_REST_TOKEN` | `withRateLimit`          | (Optional) Upstash Redis token.                         |
+| Variable                   | Used by                   | Purpose                                                 |
+| -------------------------- | ------------------------- | ------------------------------------------------------- |
+| `GITHUB_CLIENT_ID`         | `/api/auth/*`             | GitHub OAuth client ID.                                 |
+| `GITHUB_CLIENT_SECRET`     | `/api/auth/*`             | GitHub OAuth client secret.                             |
+| `GITHUB_APP_ID`            | `/api/webhooks/github`    | SecureFlow GitHub App ID.                               |
+| `GITHUB_PRIVATE_KEY`       | `/api/webhooks/github`    | App PEM private key (`\n`-escaped).                     |
+| `GITHUB_WEBHOOK_SECRET`    | `/api/webhooks/github`    | HMAC secret for webhook signature verification.         |
+| `WEBHOOK_MAX_BYTES`        | Generic webhook routes    | (Optional) Body cap in bytes; default 1 MiB.            |
+| `NEXT_PUBLIC_APP_URL`      | `/share/heist` (OG meta)  | Public origin for absolute OG image URLs.               |
+| `DATABASE_URL`             | All DB-backed routes      | Postgres connection string.                             |
+| `UPSTASH_REDIS_REST_URL`   | `withRateLimit`           | (Optional) Upstash Redis for distributed rate limiting. |
+| `UPSTASH_REDIS_REST_TOKEN` | `withRateLimit`           | (Optional) Upstash Redis token.                         |
+| `LOCAL_AI_URL`             | `/src/ai/local-model.ts`  | (Optional) Local OpenAI-compatible inference URL.       |
+| `LOCAL_AI_MODEL`           | `/src/ai/local-model.ts`  | (Optional) Model tag for local inference.               |
+| `LOCAL_AI_FALLBACK_MODELS` | `/src/ai/local-model.ts`  | (Optional) Comma-separated fallback models for OOM.     |
+| `ELEVENLABS_API_KEY`       | `/api/voice-alerts/audio` | (Optional) ElevenLabs API key for synthesized voice.    |
 
 The generic webhook routes refuse a legacy `sha256=` signature computed over the
 bare body, because it signs no timestamp and can be replayed indefinitely. Send a
@@ -678,8 +1102,9 @@ accepts the bare-body form again.
 
 ## Changelog
 
-| Date       | Change                                                 |
-| ---------- | ------------------------------------------------------ |
-| 2025-01-31 | Initial API documentation covering all 5 route groups. |
+| Date       | Change                                                                                                                                             |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2025-01-31 | Initial API documentation covering all 5 route groups.                                                                                             |
+| 2026-10-20 | Documented asynchronous SBOM scan API (/api/sbom/scan, /api/sbom/scan/status/[jobId]) and real-time voice alert stream (/api/voice-alerts/stream). |
 
 ---
