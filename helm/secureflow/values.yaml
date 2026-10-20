@@ -557,3 +557,11 @@ limitRange:
       min:
         cpu: 50m
         memory: 64Mi
+
+# ----------------------------------------------------------------------------
+# Kubernetes NetworkPolicy (Least-Privilege Pod Communication)
+# ----------------------------------------------------------------------------
+networkPolicy:
+  # Enable NetworkPolicy to restrict ingress to postgresql and redis pods
+  # strictly to app, worker, migration-job, and retention-cronjob pods.
+  enabled: false

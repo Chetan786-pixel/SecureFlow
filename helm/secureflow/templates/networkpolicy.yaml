@@ -1,0 +1,73 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- if .Values.postgresql.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "secureflow.fullname" . }}-postgresql
+  labels:
+    {{- include "secureflow.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgresql
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "secureflow.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: postgresql
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ include "secureflow.name" . }}
+              app.kubernetes.io/instance: {{ .Release.Name }}
+            matchExpressions:
+              - key: app.kubernetes.io/component
+                operator: In
+                values:
+                  - app
+                  - worker
+                  - migration
+                  - retention
+      ports:
+        - protocol: TCP
+          port: 5432
+{{- end }}
+{{- if and .Values.postgresql.enabled .Values.redis.enabled }}
+---
+{{- end }}
+{{- if .Values.redis.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "secureflow.fullname" . }}-redis
+  labels:
+    {{- include "secureflow.labels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "secureflow.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: redis
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ include "secureflow.name" . }}
+              app.kubernetes.io/instance: {{ .Release.Name }}
+            matchExpressions:
+              - key: app.kubernetes.io/component
+                operator: In
+                values:
+                  - app
+                  - worker
+                  - migration
+                  - retention
+      ports:
+        - protocol: TCP
+          port: 6379
+{{- end }}
+{{- end }}

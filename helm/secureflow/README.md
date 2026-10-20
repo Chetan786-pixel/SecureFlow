@@ -184,6 +184,7 @@ scraping each app pod twice.
 | `ingress.className`          | Ingress controller class name                   | `nginx`          |
 | `secrets.existingSecret`     | Name of pre-created secret for credentials      | `""`             |
 | `secrets.authSecret`         | Authentication secret for NextAuth session JWTs (required if `existingSecret` is empty) | `""`             |
+| `networkPolicy.enabled`      | Enable Kubernetes NetworkPolicies to enforce least-privilege ingress to postgresql and redis | `false`          |
 | `postgresql.enabled`         | Deploy in-cluster PostgreSQL StatefulSet        | `true`           |
 | `postgresql.podDisruptionBudget.enabled` | Enable PodDisruptionBudget for PostgreSQL   | `false`          |
 | `postgresql.external.host`   | Hostname of external PostgreSQL instance        | `""`             |
@@ -198,6 +199,10 @@ scraping each app pod twice.
 - **Check Pod Status**:
   ```bash
   kubectl get pods -l "app.kubernetes.io/instance=secureflow"
+  ```
+- **Check Network Policies**:
+  ```bash
+  kubectl get networkpolicy -l "app.kubernetes.io/instance=secureflow"
   ```
 - **Inspect Web Logs**:
   ```bash
