@@ -3,6 +3,7 @@ import { ScanFinding } from "./scanner";
 import prisma from "@/lib/prisma";
 import { z } from "zod";
 import { isAtLeast, parseSeverity } from "@/lib/severity";
+import { ArmorIQUnavailableError, withArmorIQBreaker } from "./armoriq-breaker";
 
 const armorIQConfigSchema = z.object({
   apiKey: z.string().default(""),
@@ -162,7 +163,7 @@ export class ArmorIQService {
    */
   static async verifyIntentToken(
     token: string | IntentToken,
-  ): Promise<{ valid: boolean; reason?: string; payload?: any }> {
+  ): Promise<{ valid: boolean; reason?: string; payload?: any; unavailable?: boolean }> {
     const client = this.getClient();
 
     if (!client) {
@@ -181,38 +182,44 @@ export class ArmorIQService {
         return { valid: false, reason: "Invalid token signing key" };
       }
 
-      const trustedKey = await client.ensureIapPublicKey();
+      // One breaker execution covers both SDK calls. Wrapping them separately let the
+      // successful key fetch reset the failure count, so a failing verifyToken never tripped it.
+      return await withArmorIQBreaker(async () => {
+        const trustedKey = await client.ensureIapPublicKey();
 
-      if (!trustedKey || trustedKey.asymmetricKeyType !== "ed25519") {
+        if (!trustedKey || trustedKey.asymmetricKeyType !== "ed25519") {
+          return {
+            valid: false,
+            reason: "Trusted ArmorIQ issuer key unavailable",
+          };
+        }
+
+        const trustedDer = trustedKey.export({
+          format: "der",
+          type: "spki",
+        });
+        const trustedRawKey = trustedDer.subarray(-32);
+        const suppliedRawKey = Buffer.from(tokenPublicKey, "hex");
+
+        if (!trustedRawKey.equals(suppliedRawKey)) {
+          return {
+            valid: false,
+            reason: "Token signing key is not trusted",
+          };
+        }
+
+        const isValid = await client.verifyToken(token);
+
         return {
-          valid: false,
-          reason: "Trusted ArmorIQ issuer key unavailable",
+          valid: Boolean(isValid),
+          reason: isValid ? undefined : "Cryptographic proof validation failed",
         };
-      }
-
-      const trustedDer = trustedKey.export({
-        format: "der",
-        type: "spki",
       });
-      const trustedRawKey = trustedDer.subarray(-32);
-      const suppliedRawKey = Buffer.from(tokenPublicKey, "hex");
-
-      if (!trustedRawKey.equals(suppliedRawKey)) {
-        return {
-          valid: false,
-          reason: "Token signing key is not trusted",
-        };
-      }
-
-      const isValid = await client.verifyToken(token);
-
-      return {
-        valid: Boolean(isValid),
-        reason: isValid ? undefined : "Cryptographic proof validation failed",
-      };
     } catch (error: unknown) {
+      // Fail closed: an unreachable ArmorIQ never validates a token.
       return {
         valid: false,
+        ...(error instanceof ArmorIQUnavailableError ? { unavailable: true } : {}),
         reason: error instanceof Error ? error.message : "Token verification failed",
       };
     }
@@ -365,6 +372,6 @@ export class ArmorIQService {
     const policy = this.compileToArmorIQPolicy(dbPolicies);
 
     // Binds the programmatic policy to the token during minting
-    return await client.getIntentToken(planCapture, policy, 3600);
+    return await withArmorIQBreaker(() => client.getIntentToken(planCapture, policy, 3600));
   }
 }

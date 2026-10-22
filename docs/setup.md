@@ -132,6 +132,11 @@ UPSTASH_REDIS_REST_TOKEN="your_token"
 
 These are only needed for advanced policy features. Leave blank for standard local development.
 
+If ArmorIQ becomes slow or unreachable, a circuit breaker opens after 3 consecutive upstream failures (timeouts, rate limits, 5xx, network errors) and ArmorIQ-gated actions are refused until it answers a probe. Both knobs are optional:
+
+- `ARMORIQ_CIRCUIT_FAILURE_THRESHOLD` — consecutive failures before the circuit opens (default `3`).
+- `ARMORIQ_CIRCUIT_RESET_TIMEOUT_MS` — milliseconds before a probe is allowed (default `30000`).
+
 ---
 
 ## 7. Workspace Architecture & Dependency Management
