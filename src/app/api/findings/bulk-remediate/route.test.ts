@@ -50,7 +50,7 @@ vi.mock("@/lib/middleware/rate-limit", () => ({
   secondsUntilReset: vi.fn(() => 60),
 }));
 
-import { POST } from "./route";
+import { POST, MAX_BULK_REQUEST_BYTES } from "./route";
 
 function makeRequest(body: unknown): NextRequest {
   return new NextRequest("http://localhost:3000/api/findings/bulk-remediate", {
@@ -117,6 +117,30 @@ describe("POST /api/findings/bulk-remediate (#814)", () => {
     );
     expect(generatePatchMock).toHaveBeenCalledTimes(1);
     expect((await res.json()).count).toBe(1);
+  });
+
+  it("rejects a streamed body over the cap before reading it all", async () => {
+    const oversized = new Uint8Array(MAX_BULK_REQUEST_BYTES + 1).fill(0x20);
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(oversized);
+        controller.close();
+      },
+    });
+    const req = new NextRequest("http://localhost:3000/api/findings/bulk-remediate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+      duplex: "half",
+    } as ConstructorParameters<typeof NextRequest>[1]);
+
+    expect(req.headers.get("content-length")).toBeNull();
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(413);
+    expect((await res.json()).error).toMatch(/maximum allowed size/i);
+    expect(findingFindMany).not.toHaveBeenCalled();
   });
 
   it("rejects more findings than one page of the dashboard can select, before any lookup", async () => {

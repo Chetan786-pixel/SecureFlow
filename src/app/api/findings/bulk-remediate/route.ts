@@ -17,6 +17,51 @@ const MAX_BULK_REMEDIATION_FINDINGS = MAX_PAGE_SIZE;
 /** Maximum allowed payload size for bulk remediation requests (128 KB). */
 export const MAX_BULK_REQUEST_BYTES = 128 * 1024;
 
+type BoundedBody = { text: string } | { tooLarge: true } | { unreadable: true };
+
+/**
+ * Read a request body without buffering more than `limit` bytes.
+ *
+ * `Content-Length` is advisory: chunked requests omit it, and a client can send
+ * a smaller value than the bytes that follow. The stream is therefore the
+ * authority. The reader is cancelled as soon as the running byte count crosses
+ * the cap, so an oversized upload is not accumulated in memory first.
+ */
+async function readBoundedBody(req: NextRequest, limit: number): Promise<BoundedBody> {
+  if (!req.body) return { text: "" };
+
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+
+      total += value.byteLength;
+      if (total > limit) {
+        await reader.cancel().catch(() => {});
+        return { tooLarge: true };
+      }
+      chunks.push(value);
+    }
+  } catch {
+    await reader.cancel().catch(() => {});
+    return { unreadable: true };
+  }
+
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  return { text: new TextDecoder().decode(merged) };
+}
+
 interface BulkFindingRecord {
   id: string;
   type: string;
@@ -87,19 +132,17 @@ const handler = async function POST(req: NextRequest) {
       );
     }
 
-    let rawText: string;
-    try {
-      rawText = await req.text();
-    } catch {
-      return NextResponse.json({ error: "Cannot read request body" }, { status: 400 });
-    }
-
-    if (Buffer.byteLength(rawText, "utf-8") > MAX_BULK_REQUEST_BYTES) {
+    const bodyResult = await readBoundedBody(req, MAX_BULK_REQUEST_BYTES);
+    if ("tooLarge" in bodyResult) {
       return NextResponse.json(
         { error: "Request payload exceeds maximum allowed size" },
         { status: 413 },
       );
     }
+    if ("unreadable" in bodyResult) {
+      return NextResponse.json({ error: "Cannot read request body" }, { status: 400 });
+    }
+    const rawText = bodyResult.text;
 
     let body: { action?: string; findingIds?: unknown };
     try {
