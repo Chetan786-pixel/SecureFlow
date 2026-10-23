@@ -55,8 +55,22 @@ export interface AgentExecutionResult {
   error?: string;
 }
 
-const DEFAULT_SIGNING_KEY =
-  process.env.ARMORIQ_PROOF_SIGNING_KEY || "armoriq-boundary-provenance-key-v1";
+/**
+ * Resolve the HMAC key used for boundary verdict proofs.
+ *
+ * The previous fallback key was committed to the repository. Anyone could mint
+ * a proof that verified against a deployment that had not configured the
+ * variable. Signing now refuses to start without a private key.
+ */
+function resolveSigningKey(explicitKey?: string): string {
+  const key = explicitKey?.trim() || process.env.ARMORIQ_PROOF_SIGNING_KEY?.trim();
+  if (!key) {
+    throw new Error(
+      "ARMORIQ_PROOF_SIGNING_KEY is not configured; refusing to sign or verify ArmorIQ proofs with a public fallback key.",
+    );
+  }
+  return key;
+}
 
 /**
  * Computes a deterministic SHA-256 hash for a verdict record.
@@ -95,8 +109,8 @@ function signProofHash(proofHash: string, signingKey: string): string {
 export class ArmorIQBoundaryInterceptor {
   private signingKey: string;
 
-  constructor(signingKey: string = DEFAULT_SIGNING_KEY) {
-    this.signingKey = signingKey;
+  constructor(signingKey?: string) {
+    this.signingKey = resolveSigningKey(signingKey);
   }
 
   /**
@@ -183,9 +197,16 @@ export class ArmorIQBoundaryInterceptor {
   /**
    * Cryptographically verifies an issued VerdictProof.
    */
-  static verifyProof(proof: VerdictProof, signingKey: string = DEFAULT_SIGNING_KEY): boolean {
+  static verifyProof(proof: VerdictProof, signingKey?: string): boolean {
     if (!proof || typeof proof !== "object") return false;
     if (proof.verdict === "DENY" && !proof.executionPrevented) return false;
+
+    let resolvedKey: string;
+    try {
+      resolvedKey = resolveSigningKey(signingKey);
+    } catch {
+      return false;
+    }
 
     const recalculatedHash = computeVerdictHash(
       proof.command,
@@ -196,7 +217,7 @@ export class ArmorIQBoundaryInterceptor {
 
     if (recalculatedHash !== proof.proofHash) return false;
 
-    const recalculatedSig = signProofHash(recalculatedHash, signingKey);
+    const recalculatedSig = signProofHash(recalculatedHash, resolvedKey);
     return recalculatedSig === proof.signature;
   }
 
