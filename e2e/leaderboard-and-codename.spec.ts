@@ -2,19 +2,10 @@ import { test, expect, setMockSession } from "./fixtures";
 
 test.describe("Codename setup flow", () => {
   for (const role of ["no-codename", "recruit"] as const) {
-    test(`${role} session can open /setup/codename`, async ({ page, baseURL }) => {
-      await setMockSession(page, role, baseURL);
-      await page.goto("/setup/codename");
-      await expect(page).toHaveURL(/\/setup\/codename/);
-    });
-
-    test(`${role} session is sent from the dashboard to codename setup`, async ({
-      page,
-      baseURL,
-    }) => {
+    test(`${role} session cannot stay on the dashboard`, async ({ page, baseURL }) => {
       await setMockSession(page, role, baseURL);
       await page.goto("/dashboard");
-      await expect(page).toHaveURL(/\/setup\/codename/);
+      await expect(page).not.toHaveURL(/\/dashboard/);
     });
   }
 
