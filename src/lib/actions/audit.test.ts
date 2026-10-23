@@ -205,6 +205,32 @@ describe("getUserAuditLogs (#659 regression guard)", () => {
 
     expect(mockFindMany.mock.calls[0][0].take).toBe(100);
   });
+
+  const invalidPaginationCases: Array<
+    [string, { page?: number; pageSize?: number }, number, number, number]
+  > = [
+    ["NaN page", { page: Number.NaN }, 1, 10, 0],
+    ["infinite page", { page: Number.POSITIVE_INFINITY }, 1, 10, 0],
+    ["negative infinite page", { page: Number.NEGATIVE_INFINITY }, 1, 10, 0],
+    ["negative page", { page: -4 }, 1, 10, 0],
+    ["fractional page", { page: 2.9 }, 2, 10, 10],
+    ["NaN page size", { pageSize: Number.NaN }, 1, 10, 0],
+    ["infinite page size", { pageSize: Number.POSITIVE_INFINITY }, 1, 10, 0],
+    ["fractional page size", { pageSize: 10.9 }, 1, 10, 0],
+  ];
+
+  it.each(invalidPaginationCases)(
+    "normalizes %s before building the Prisma query",
+    async (_label, query, expectedPage, expectedPageSize, expectedSkip) => {
+      const result = await getUserAuditLogs(query);
+
+      expect(result).toMatchObject({ page: expectedPage, pageSize: expectedPageSize });
+      expect(mockFindMany.mock.calls[0][0]).toMatchObject({
+        skip: expectedSkip,
+        take: expectedPageSize,
+      });
+    },
+  );
 });
 
 describe('"use server" module contract', () => {

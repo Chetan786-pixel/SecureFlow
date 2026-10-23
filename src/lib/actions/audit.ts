@@ -83,8 +83,16 @@ function buildUserAuditLogWhere(
 export async function getUserAuditLogs(query: UserAuditLogQuery = {}): Promise<UserAuditLogResult> {
   const userId = await requireUser();
 
-  const page = Math.max(1, query.page ?? 1);
-  const pageSize = Math.min(100, Math.max(1, query.pageSize ?? 10));
+  // Server Actions are HTTP endpoints, so these values are not guaranteed to
+  // be finite numbers just because the TypeScript interface says `number`.
+  // NaN and Infinity survive Math.max/Math.min and become invalid Prisma
+  // `skip`/`take` values, turning a malformed request into a 500.
+  const requestedPage =
+    typeof query.page === "number" && Number.isFinite(query.page) ? query.page : 1;
+  const requestedPageSize =
+    typeof query.pageSize === "number" && Number.isFinite(query.pageSize) ? query.pageSize : 10;
+  const page = Math.max(1, Math.floor(requestedPage));
+  const pageSize = Math.min(100, Math.max(1, Math.floor(requestedPageSize)));
   const where = buildUserAuditLogWhere(userId, query);
 
   const [logs, total] = await Promise.all([
