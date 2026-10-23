@@ -1,19 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
-const { authMock, findingFindMany, patchUpsert, generatePatchMock } = vi.hoisted(() => ({
-  authMock: vi.fn(),
-  findingFindMany: vi.fn(),
-  patchUpsert: vi.fn(),
-  generatePatchMock: vi.fn(),
-}));
+const { authMock, findingFindMany, patchUpsert, patchUpdateMany, generatePatchMock } = vi.hoisted(
+  () => ({
+    authMock: vi.fn(),
+    findingFindMany: vi.fn(),
+    patchUpsert: vi.fn(),
+    patchUpdateMany: vi.fn(),
+    generatePatchMock: vi.fn(),
+  }),
+);
 
 vi.mock("@/auth", () => ({ auth: authMock }));
 
 vi.mock("@/lib/prisma", () => ({
   default: {
     finding: { findMany: findingFindMany },
-    remediationPatch: { upsert: patchUpsert },
+    remediationPatch: { upsert: patchUpsert, updateMany: patchUpdateMany },
   },
 }));
 
@@ -204,6 +207,38 @@ describe("POST /api/findings/bulk-remediate (#814)", () => {
 
     expect(generatePatchMock).toHaveBeenCalledTimes(2);
     expect(patchUpsert).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports the number of patch rows the database actually updated", async () => {
+    findingFindMany.mockResolvedValue([
+      { id: "f-1", type: "SECRET" },
+      { id: "f-2", type: "SECRET" },
+    ]);
+    patchUpdateMany.mockResolvedValueOnce({ count: 1 });
+
+    const res = await POST(makeRequest({ action: "apply", findingIds: ["f-1", "f-2"] }));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ success: true, updatedCount: 1, status: "APPLIED" });
+    expect(patchUpdateMany).toHaveBeenCalledWith({
+      where: { findingId: { in: ["f-1", "f-2"] } },
+      data: { status: "APPLIED" },
+    });
+    expect(generatePatchMock).not.toHaveBeenCalled();
+  });
+
+  it("does not claim a rollback succeeded when no patch rows matched", async () => {
+    findingFindMany.mockResolvedValue([{ id: "f-1", type: "SECRET" }]);
+    patchUpdateMany.mockResolvedValueOnce({ count: 0 });
+
+    const res = await POST(makeRequest({ action: "rollback", findingIds: ["f-1"] }));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ success: true, updatedCount: 0, status: "PENDING" });
+    expect(patchUpdateMany).toHaveBeenCalledWith({
+      where: { findingId: { in: ["f-1"] } },
+      data: { status: "PENDING" },
+    });
   });
 
   it("returns 429 when user rate limit is exceeded", async () => {
