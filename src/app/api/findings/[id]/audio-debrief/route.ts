@@ -130,7 +130,9 @@ async function handler(request: NextRequest, { params }: { params: Promise<{ id:
         "Content-Type": "audio/mpeg",
         "Content-Length": String(cachedAudio.length),
         "X-Audio-Cache": "HIT",
-        "Cache-Control": "public, max-age=86400, immutable",
+        // The brief describes a private finding. A shared proxy or CDN must not
+        // retain and replay it, even though the content hash makes the URL stable.
+        "Cache-Control": "private, max-age=3600, immutable",
         ETag: `"${cacheKey}"`,
       },
     });
@@ -205,9 +207,11 @@ async function handler(request: NextRequest, { params }: { params: Promise<{ id:
     );
   }
 
-  // Fallback playable MP3 audio buffer
+  // Fallback playable MP3 audio buffer. This is a placeholder for a transient
+  // upstream outage, not a synthesis of the finding, so it is deliberately not
+  // written to the shared cache: doing so turned one ElevenLabs failure into
+  // seven days of silent HIT responses.
   const fallbackBuffer = createFallbackAudioBuffer(briefText);
-  await setCachedAudioDebrief(cacheKey, fallbackBuffer);
 
   return new Response(fallbackBuffer as unknown as BodyInit, {
     status: 200,

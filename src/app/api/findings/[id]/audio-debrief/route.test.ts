@@ -139,6 +139,8 @@ describe("/api/findings/[id]/audio-debrief", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("audio/mpeg");
     expect(res.headers.get("X-Audio-Cache")).toBe("HIT");
+    expect(res.headers.get("Cache-Control")).toContain("private");
+    expect(res.headers.get("Cache-Control")).not.toContain("public");
     expect(fetchElevenLabsMock).not.toHaveBeenCalled();
   });
 
@@ -199,8 +201,9 @@ describe("/api/findings/[id]/audio-debrief", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("audio/mpeg");
     expect(res.headers.get("X-Audio-Cache")).toBe("FALLBACK");
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
     expect(createFallbackAudioMock).toHaveBeenCalledWith("Auditory brief text for finding");
-    expect(setCachedAudioMock).toHaveBeenCalledWith("cache-key-123", fallbackBuffer);
+    expect(setCachedAudioMock).not.toHaveBeenCalled();
   });
 
   it("generates AI explanation dynamically when finding has no pre-existing explanation", async () => {
