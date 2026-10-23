@@ -185,6 +185,31 @@ describe("parseUnifiedPatch — headers and metadata", () => {
     ]);
   });
 
+  it("does not turn a later file header into an added line in a multi-file patch", () => {
+    const parsed = parseUnifiedPatch(
+      patch(
+        "diff --git a/src/a.ts b/src/a.ts",
+        "--- a/src/a.ts",
+        "+++ b/src/a.ts",
+        "@@ -1,1 +1,2 @@",
+        " const a = 1;",
+        "+const b = 2;",
+        "diff --git a/src/c.ts b/src/c.ts",
+        "--- a/src/c.ts",
+        "+++ b/src/c.ts",
+        "@@ -1,1 +1,1 @@",
+        "+const c = 3;",
+      ),
+    );
+
+    expect(parsed.lines).toEqual([
+      { number: 1, content: "const a = 1;", kind: "context" },
+      { number: 2, content: "const b = 2;", kind: "added" },
+      { number: 1, content: "const c = 3;", kind: "added" },
+    ]);
+    expect(parsed.lines.map((line) => line.content)).not.toContain("++ b/src/c.ts");
+  });
+
   it("drops an unrecognised line without shifting the numbering after it", () => {
     const parsed = parseUnifiedPatch(patch("@@ -1,2 +1,2 @@", "+a();", "?????", "+b();"));
 
