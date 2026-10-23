@@ -105,26 +105,80 @@ function parsePackageJson(content: string, filePath: string): Dependency[] {
 }
 
 /**
+ * A requirement name, optional extras, and the remainder of the line.
+ *
+ * PEP 508 names may contain dots, underscores and hyphens, and must start and
+ * end with an alphanumeric character. The previous pattern stopped at the first
+ * dot, so `zope.interface` was read as `zope`.
+ */
+const REQUIREMENT_NAME = /^([A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)(?:\s*\[[^\]]*\])?\s*(.*)$/;
+
+/** A concrete version after one of the comparison operators pip accepts. */
+const REQUIREMENT_VERSION = /^(===|==|~=|!=|<=|>=|<|>)\s*([^\s,;]+)/;
+
+/** Operators whose named version is outside the set the project accepts. */
+const EXCLUSION_OPERATORS = new Set(["!=", "<"]);
+
+/**
  * Parses a requirements.txt file content to extract dependencies.
  */
 function parseRequirementsTxt(content: string, filePath: string): Dependency[] {
   const deps: Dependency[] = [];
   const lines = content.split("\n");
 
-  for (const line of lines) {
-    const trimmed = line.trim();
+  for (const rawLine of lines) {
+    let trimmed = rawLine.trim();
     if (!trimmed || trimmed.startsWith("#")) continue;
 
-    // Basic parsing for ==, >=, <=, ~=
-    const match = trimmed.match(/^([a-zA-Z0-9_-]+)\s*([=<>~!]+)?\s*([0-9.a-zA-Z-]+)?/);
-    if (match) {
-      deps.push({
-        name: match[1].toLowerCase(),
-        version: match[3] || "unknown",
-        manifestFile: filePath,
-        ecosystem: "pypi",
-      });
+    // pip treats a hash preceded by whitespace as a comment. A URL fragment
+    // such as `#egg=name` has no preceding whitespace and must survive.
+    const commentAt = trimmed.search(/\s#/);
+    if (commentAt !== -1) trimmed = trimmed.slice(0, commentAt).trim();
+    if (!trimmed) continue;
+
+    // Option lines (`-r`, `-c`, `--index-url`, ...) and bare archive/VCS URLs
+    // name no package. The old parser read `https` as a package name.
+    if (trimmed.startsWith("-")) continue;
+    if (/^(?:https?|git\+[a-z]+|ssh|file):/i.test(trimmed)) continue;
+
+    const nameMatch = trimmed.match(REQUIREMENT_NAME);
+    if (!nameMatch) continue;
+
+    const name = nameMatch[1].toLowerCase();
+    let rest = nameMatch[2].trim();
+
+    // A direct reference (`package @ https://...`) has no version OSV can match.
+    if (rest.startsWith("@")) {
+      deps.push({ name, version: "unknown", manifestFile: filePath, ecosystem: "pypi" });
+      continue;
     }
+
+    // Environment markers start at the first semicolon. They constrain where a
+    // requirement applies, not which version is installed.
+    const markerAt = rest.indexOf(";");
+    if (markerAt !== -1) rest = rest.slice(0, markerAt).trim();
+
+    const versionMatch = rest.match(REQUIREMENT_VERSION);
+    if (!versionMatch) {
+      deps.push({ name, version: "unknown", manifestFile: filePath, ecosystem: "pypi" });
+      continue;
+    }
+
+    const [, operator, version] = versionMatch;
+
+    // `!=1.2.3` and `<1.2.3` name versions the project explicitly excludes. The
+    // old code dropped the operator and queried the excluded version as though
+    // it were installed, producing false positives.
+    if (
+      EXCLUSION_OPERATORS.has(operator) ||
+      version.includes("*") ||
+      /(^|\.)[xX](\.|$)/.test(version)
+    ) {
+      deps.push({ name, version: "unknown", manifestFile: filePath, ecosystem: "pypi" });
+      continue;
+    }
+
+    deps.push({ name, version, manifestFile: filePath, ecosystem: "pypi" });
   }
   return deps;
 }
