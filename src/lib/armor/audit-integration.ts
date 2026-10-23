@@ -18,6 +18,8 @@ export interface ArmorIQAuditLogInput {
 }
 
 export interface ArmorIQTraceQuery {
+  /** Authenticated owner. Logs are scoped through their scan job or finding. */
+  userId: string;
   scanJobId?: string;
   findingId?: string;
   decision?: string;
@@ -84,13 +86,82 @@ export async function recordArmorIQAuditLog(input: ArmorIQAuditLogInput) {
 }
 
 /**
+ * Confirms that any scan job or finding referenced by an audit record belongs
+ * to the authenticated user.
+ *
+ * ArmorIQEnforcementLog has no owner column of its own. Ownership is inherited
+ * from the linked ScanJob.repository or Finding.scanResult.pullRequest.repository.
+ * A caller must not be able to attach a forged enforcement record to another
+ * tenant's scan by guessing its ID.
+ */
+export async function verifyArmorIQAuditResourceOwnership(input: {
+  userId: string;
+  scanJobId?: string | null;
+  findingId?: string | null;
+}): Promise<boolean> {
+  const { userId, scanJobId, findingId } = input;
+  if (!scanJobId && !findingId) return true;
+
+  const checks: Array<Promise<unknown>> = [];
+
+  if (scanJobId) {
+    checks.push(
+      prisma.scanJob.findFirst({
+        where: { id: scanJobId, repository: { is: { userId } } },
+        select: { id: true },
+      }),
+    );
+  }
+
+  if (findingId) {
+    checks.push(
+      prisma.finding.findFirst({
+        where: {
+          id: findingId,
+          scanResult: {
+            is: {
+              pullRequest: {
+                is: { repository: { is: { userId } } },
+              },
+            },
+          },
+        },
+        select: { id: true },
+      }),
+    );
+  }
+
+  const results = await Promise.all(checks);
+  return results.every(Boolean);
+}
+
+/**
  * Retrieves enforcement metadata and execution traces with strict privacy filtering.
  * Sensitive fine-grained raw tokens are stripped, leaving only verifiable compliance metadata.
+ *
+ * The query is always scoped to the authenticated user through the owning scan
+ * job or finding. Logs with neither relation cannot be attributed to a tenant
+ * and are therefore not returned.
  */
-export async function fetchArmorIQAuditTraces(query: ArmorIQTraceQuery = {}) {
-  const { scanJobId, findingId, decision, agentId, limit = 50, offset = 0 } = query;
+export async function fetchArmorIQAuditTraces(query: ArmorIQTraceQuery) {
+  const { userId, scanJobId, findingId, decision, agentId, limit = 50, offset = 0 } = query;
 
-  const where: any = {};
+  const where: any = {
+    OR: [
+      { scanJob: { is: { repository: { is: { userId } } } } },
+      {
+        finding: {
+          is: {
+            scanResult: {
+              is: {
+                pullRequest: { is: { repository: { is: { userId } } } },
+              },
+            },
+          },
+        },
+      },
+    ],
+  };
   if (scanJobId) where.scanJobId = scanJobId;
   if (findingId) where.findingId = findingId;
   if (decision) where.decision = decision;

@@ -4,6 +4,7 @@ import {
   fetchArmorIQAuditTraces,
   recordArmorIQAuditLog,
   buildComplianceReport,
+  verifyArmorIQAuditResourceOwnership,
 } from "@/lib/armor/audit-integration";
 import { withRateLimit, TIERS } from "@/lib/middleware/rate-limit";
 
@@ -34,6 +35,7 @@ async function getHandler(request: NextRequest) {
     const framework = (searchParams.get("framework") as "SOC2" | "ISO27001" | "ALL") || "ALL";
 
     const { traces, total } = await fetchArmorIQAuditTraces({
+      userId: session.user.id,
       scanJobId,
       findingId,
       decision,
@@ -109,6 +111,16 @@ async function postHandler(request: NextRequest) {
         { error: "agentId, toolName, and decision ('ALLOW' | 'BLOCK' | 'HOLD') are required." },
         { status: 400 },
       );
+    }
+
+    const ownsReferencedResource = await verifyArmorIQAuditResourceOwnership({
+      userId: session.user.id,
+      scanJobId,
+      findingId,
+    });
+    if (!ownsReferencedResource) {
+      // 404 avoids confirming whether the guessed ID exists for another tenant.
+      return NextResponse.json({ error: "Scan job or finding not found" }, { status: 404 });
     }
 
     const log = await recordArmorIQAuditLog({
