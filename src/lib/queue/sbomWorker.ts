@@ -656,6 +656,10 @@ sbomWorker.on("completed", (job: Job) => {
   log.info("SBOM job completed", { jobId: job.id });
 });
 
+sbomWorker.on("error", (err: Error) => {
+  log.error("SBOM worker connection error", { error: err.message });
+});
+
 sbomWorker.on("failed", async (job: Job | undefined, err: Error) => {
   if (!job) return;
 

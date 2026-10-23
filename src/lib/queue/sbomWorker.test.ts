@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { mockPrisma, mockRedis, mockDLQInstance } = vi.hoisted(() => {
+const { mockPrisma, mockRedis, mockDLQInstance, registeredEvents } = vi.hoisted(() => {
   const mockPrisma = {
     scanJob: {
       findUnique: vi.fn(),
@@ -27,7 +27,7 @@ const { mockPrisma, mockRedis, mockDLQInstance } = vi.hoisted(() => {
     add: vi.fn().mockResolvedValue({ id: "dlq-job-1" }),
   };
 
-  return { mockPrisma, mockRedis, mockDLQInstance };
+  return { mockPrisma, mockRedis, mockDLQInstance, registeredEvents: [] as string[] };
 });
 
 vi.mock("bullmq", () => {
@@ -39,7 +39,9 @@ vi.mock("bullmq", () => {
   }
 
   class MockWorker {
-    on = vi.fn();
+    on = vi.fn((event: string) => {
+      registeredEvents.push(event);
+    });
     close = vi.fn().mockResolvedValue(undefined);
   }
 
@@ -78,6 +80,12 @@ vi.mock("@/lib/sbom/vulnerability-matcher", () => ({
 
 import { processSbomJob } from "./sbomWorker";
 import { UnrecoverableError } from "bullmq";
+
+describe("sbomWorker registration", () => {
+  it("registers an error listener for connection failures", () => {
+    expect(registeredEvents).toContain("error");
+  });
+});
 
 describe("sbomWorker", () => {
   beforeEach(() => {
