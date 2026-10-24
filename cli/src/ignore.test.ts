@@ -241,3 +241,18 @@ mock_api_key_456
     });
   });
 });
+
+describe("globToRegexSource ** segment boundaries", () => {
+  it("treats ** inside a name as a single-star segment", () => {
+    const patterns = compileIgnorePatterns(["a**b"]);
+    expect(patterns.some((re) => re.test("axxb"))).toBe(true);
+    expect(patterns.some((re) => re.test("a/b"))).toBe(false);
+    expect(patterns.some((re) => re.test("src/a/b.ts"))).toBe(false);
+  });
+
+  it("still matches recursive ** as a full segment", () => {
+    const patterns = compileIgnorePatterns(["tests/**"]);
+    expect(patterns.some((re) => re.test("tests/a/b.ts"))).toBe(true);
+    expect(patterns.some((re) => re.test("src/a.ts"))).toBe(false);
+  });
+});
