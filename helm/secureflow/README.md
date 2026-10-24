@@ -162,13 +162,13 @@ scraping each app pod twice.
 | `app.autoscaling.enabled`    | Enable HorizontalPodAutoscaler for app          | `false`          |
 | `app.podDisruptionBudget.enabled`    | Enable PodDisruptionBudget for app              | `true`           |
 | `app.podDisruptionBudget.minAvailable` | Minimum available app replicas during voluntary disruptions | `1` |
-| `app.resources.requests`     | Enforced CPU and memory requests for app container | `cpu: 250m, memory: 512Mi` |
-| `app.resources.limits`       | Enforced CPU and memory limits for app container   | `cpu: 1000m, memory: 1024Mi` |
+| `app.resources.requests`     | Enforced CPU and memory requests for app container | `cpu: 250m, memory: 512Mi, ephemeral-storage: 512Mi` |
+| `app.resources.limits`       | Enforced CPU and memory limits for app container   | `cpu: 1000m, memory: 1024Mi, ephemeral-storage: 2Gi` |
 | `worker.enabled`             | Enable background queue workers                 | `true`           |
 | `worker.replicaCount`        | Number of worker replicas                       | `2`              |
 | `worker.concurrency`         | Scan concurrency per worker                     | `5`              |
-| `worker.resources.requests`  | Enforced CPU and memory requests for worker container (OOM protection during heavy AST/SBOM scans) | `cpu: 500m, memory: 1Gi` |
-| `worker.resources.limits`    | Enforced CPU and memory limits for worker container | `cpu: 2000m, memory: 2Gi` |
+| `worker.resources.requests`  | Enforced CPU and memory requests for worker container (OOM protection during heavy AST/SBOM scans) | `cpu: 500m, memory: 1Gi, ephemeral-storage: 2Gi` |
+| `worker.resources.limits`    | Enforced CPU and memory limits for worker container | `cpu: 2000m, memory: 2Gi, ephemeral-storage: 10Gi` |
 | `worker.autoscaling.enabled` | Enable HorizontalPodAutoscaler for workers      | `false`          |
 | `worker.podDisruptionBudget.enabled` | Enable PodDisruptionBudget for workers          | `true`           |
 | `worker.podDisruptionBudget.minAvailable` | Minimum available worker replicas during voluntary disruptions | `1` |

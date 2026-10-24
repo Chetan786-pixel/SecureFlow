@@ -63,3 +63,88 @@ grep -Fq -- '- app' <<< "$network_policies"
 grep -Fq -- '- worker' <<< "$network_policies"
 grep -Fq -- '- migration' <<< "$network_policies"
 grep -Fq -- '- retention' <<< "$network_policies"
+
+# ---------------------------------------------------------------------------
+# Resource requests/limits (#1186)
+#
+# Every workload container must render non-empty cpu and memory requests AND
+# limits, otherwise a large concurrent repository scan can exhaust the node.
+# ---------------------------------------------------------------------------
+rendered="$("$helm_bin" template check "$chart_dir" \
+  --set secrets.authSecret=local-test-only)"
+
+# Walk every container resources: block in the rendered manifests. PVC
+# volumeClaimTemplates also have a resources: block (storage only); those are
+# skipped. Prints one error per container block that is missing a field.
+resource_errors="$(awk '
+  function indent(s) { match(s, /[^ ]/); return RSTART - 1 }
+  function finish(   ok) {
+    if (!inblock) return
+    inblock = 0
+    if (storage) return
+    checked++
+    if (!(lim_cpu && lim_mem && req_cpu && req_mem)) {
+      printf "container resources block at rendered line %d is missing cpu/memory requests or limits\n", start
+    }
+  }
+  /^---/ { finish() }
+  {
+    if (inblock) {
+      if ($0 ~ /^[[:space:]]*$/ || indent($0) > base) {
+        if ($0 ~ /^[[:space:]]*limits:/)   section = "lim"
+        if ($0 ~ /^[[:space:]]*requests:/) section = "req"
+        if ($0 ~ /^[[:space:]]*storage:/)  storage = 1
+        if (section == "lim" && $0 ~ /^[[:space:]]*cpu: *[^ ]/)    lim_cpu = 1
+        if (section == "lim" && $0 ~ /^[[:space:]]*memory: *[^ ]/) lim_mem = 1
+        if (section == "req" && $0 ~ /^[[:space:]]*cpu: *[^ ]/)    req_cpu = 1
+        if (section == "req" && $0 ~ /^[[:space:]]*memory: *[^ ]/) req_mem = 1
+        next
+      }
+      finish()
+    }
+    if ($0 ~ /^[[:space:]]*resources:[[:space:]]*$/) {
+      inblock = 1; base = indent($0); start = NR; section = ""; storage = 0
+      lim_cpu = lim_mem = req_cpu = req_mem = 0
+    }
+  }
+  END { finish(); if (checked < 6) printf "expected at least 6 container resource blocks (app, worker, migration, retention, postgresql, redis), found %d\n", checked }
+' <<< "$rendered")"
+
+if [ -n "$resource_errors" ]; then
+  echo "$resource_errors" >&2
+  exit 1
+fi
+
+# app and worker also bound ephemeral-storage (requests and limits).
+for tpl in app-deployment worker-deployment; do
+  manifest="$("$helm_bin" template check "$chart_dir" \
+    --show-only "templates/$tpl.yaml" \
+    --set secrets.authSecret=local-test-only)"
+  if [ "$(grep -c 'ephemeral-storage:' <<< "$manifest")" -ne 2 ]; then
+    echo "$tpl must set ephemeral-storage in both requests and limits" >&2
+    exit 1
+  fi
+done
+
+# The ephemeral-storage defaults must survive a partial resources override.
+partial="$("$helm_bin" template check "$chart_dir" \
+  --show-only templates/worker-deployment.yaml \
+  --set secrets.authSecret=local-test-only \
+  --set worker.resources.limits.cpu=3)"
+grep -Fq 'ephemeral-storage:' <<< "$partial"
+
+# values.schema.json must reject missing or malformed resource blocks.
+expect_schema_rejection() {
+  if "$helm_bin" template check "$chart_dir" \
+      --set secrets.authSecret=local-test-only "$@" > /dev/null 2>&1; then
+    echo "values.schema.json accepted invalid resources: $*" >&2
+    exit 1
+  fi
+}
+for workload in app worker migration retention postgresql redis; do
+  expect_schema_rejection --set "$workload.resources.limits.memory=null"
+  expect_schema_rejection --set "$workload.resources.requests.cpu=null"
+  expect_schema_rejection --set "$workload.resources.limits=null"
+  expect_schema_rejection --set "$workload.resources.requests=null"
+  expect_schema_rejection --set "$workload.resources.limits.cpu=lots"
+done

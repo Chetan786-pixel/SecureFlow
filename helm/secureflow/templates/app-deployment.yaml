@@ -66,9 +66,11 @@ spec:
             limits:
               cpu: {{ default "1000m" (dig "limits" "cpu" "1000m" .Values.app.resources) | quote }}
               memory: {{ default "1024Mi" (dig "limits" "memory" "1024Mi" .Values.app.resources) | quote }}
+              ephemeral-storage: {{ default "2Gi" (dig "limits" "ephemeral-storage" "2Gi" .Values.app.resources) | quote }}
             requests:
               cpu: {{ default "250m" (dig "requests" "cpu" "250m" .Values.app.resources) | quote }}
               memory: {{ default "512Mi" (dig "requests" "memory" "512Mi" .Values.app.resources) | quote }}
+              ephemeral-storage: {{ default "512Mi" (dig "requests" "ephemeral-storage" "512Mi" .Values.app.resources) | quote }}
             {{- end }}
       {{- with .Values.app.nodeSelector }}
       nodeSelector:
