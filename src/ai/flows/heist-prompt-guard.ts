@@ -836,9 +836,15 @@ export async function armorIQRuntimeGatekeeper(params: {
         resource: targetPath || action,
         reason,
         rule: "deny:tampered_intent",
-        proofHash: signedIntent.intentHash,
-        signature: signedIntent.signature,
-        intentId: signedIntent.intentId,
+        proofHash:
+          typeof signedIntent.intentHash === "string"
+            ? signedIntent.intentHash
+            : "proof_invalid_intent",
+        signature:
+          typeof signedIntent.signature === "string"
+            ? signedIntent.signature
+            : "sig_invalid_intent",
+        intentId: typeof signedIntent.intentId === "string" ? signedIntent.intentId : undefined,
         complianceFrameworks: signedIntent.complianceMetadata?.frameworks,
       });
 

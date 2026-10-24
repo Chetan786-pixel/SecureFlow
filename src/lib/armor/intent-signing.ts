@@ -47,6 +47,39 @@ function resolveSigningKey(explicitKey?: string): string {
   return key;
 }
 
+/** True for a non-empty string after trimming. */
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+/** True for a plain JSON-like object, not an array or null. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Validates the runtime shape of an execution plan.
+ *
+ * Signed intents can arrive from an API boundary, a queue payload, or a JWT
+ * payload, none of which TypeScript checks. `computeIntentHash` spreads
+ * `proposedTools` and `targetPaths`, so a missing or non-array field used to
+ * throw before verification could return its fail-closed result.
+ */
+function isValidExecutionPlan(plan: unknown): plan is ExecutionPlan {
+  if (!isRecord(plan)) return false;
+  if (!isNonEmptyString(plan.goal)) return false;
+  if (!Array.isArray(plan.proposedTools)) return false;
+  if (!plan.proposedTools.every(isNonEmptyString)) return false;
+  if (
+    plan.targetPaths !== undefined &&
+    (!Array.isArray(plan.targetPaths) || !plan.targetPaths.every(isNonEmptyString))
+  ) {
+    return false;
+  }
+  if (plan.metadata !== undefined && !isRecord(plan.metadata)) return false;
+  return true;
+}
+
 /**
  * Computes a deterministic SHA-256 hash for an execution plan.
  */
@@ -128,8 +161,23 @@ export function verifySignedIntent(
   signedIntent: SignedIntent,
   signingKey?: string,
 ): { valid: boolean; reason?: string } {
-  if (!signedIntent || typeof signedIntent !== "object") {
+  if (!isRecord(signedIntent)) {
     return { valid: false, reason: "Missing or malformed signed intent structure." };
+  }
+
+  if (
+    !isNonEmptyString(signedIntent.intentId) ||
+    !isNonEmptyString(signedIntent.agentId) ||
+    typeof signedIntent.timestamp !== "number" ||
+    !Number.isFinite(signedIntent.timestamp) ||
+    !isNonEmptyString(signedIntent.intentHash) ||
+    !isNonEmptyString(signedIntent.signature) ||
+    !isValidExecutionPlan(signedIntent.plan)
+  ) {
+    return {
+      valid: false,
+      reason: "Missing or malformed signed intent structure or execution plan.",
+    };
   }
 
   let resolvedKey: string;
@@ -142,12 +190,17 @@ export function verifySignedIntent(
     };
   }
 
-  const expectedHash = computeIntentHash(
-    signedIntent.intentId,
-    signedIntent.agentId,
-    signedIntent.plan,
-    signedIntent.timestamp,
-  );
+  let expectedHash: string;
+  try {
+    expectedHash = computeIntentHash(
+      signedIntent.intentId,
+      signedIntent.agentId,
+      signedIntent.plan,
+      signedIntent.timestamp,
+    );
+  } catch {
+    return { valid: false, reason: "Malformed execution plan: intent hash could not be computed." };
+  }
 
   if (expectedHash !== signedIntent.intentHash) {
     return {

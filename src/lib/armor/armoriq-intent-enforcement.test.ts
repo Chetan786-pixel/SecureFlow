@@ -5,6 +5,7 @@ import {
   verifySignedIntent,
   computeIntentHash,
   type ExecutionPlan,
+  type SignedIntent,
 } from "./intent-signing";
 import { armorIQRuntimeGatekeeper, enforceRuntimeIntent } from "@/ai/flows/heist-prompt-guard";
 import { emitExecutionPlan, signAgentIntent } from "@/ai/genkit";
@@ -162,6 +163,71 @@ describe("ArmorIQ Pre-Execution Intent Signing (#1275)", () => {
     const verification = verifySignedIntent(forged);
     expect(verification.valid).toBe(false);
     expect(verification.reason).toContain("Cryptographic signature verification failed");
+  });
+
+  it.each([
+    ["missing proposedTools", { goal: "Remediate SQL injection" }],
+    [
+      "non-array proposedTools",
+      { goal: "Remediate SQL injection", proposedTools: "generateUnifiedDiff" },
+    ],
+    [
+      "non-array targetPaths",
+      {
+        goal: "Remediate SQL injection",
+        proposedTools: ["generateUnifiedDiff"],
+        targetPaths: { path: "src/auth/login.ts" },
+      },
+    ],
+    [
+      "array metadata",
+      {
+        goal: "Remediate SQL injection",
+        proposedTools: ["generateUnifiedDiff"],
+        metadata: ["not", "an", "object"],
+      },
+    ],
+  ])("rejects a signed intent with %s instead of throwing", (_label, plan) => {
+    const malformed = {
+      intentId: "intent_malformed",
+      agentId: ARMORIQ_AGENT_IDS.REMEDIATION_PATCH_GENERATOR,
+      timestamp: Date.now(),
+      plan,
+      intentHash: "a".repeat(64),
+      signature: "b".repeat(64),
+      intentToken: "malformed.token.value",
+      complianceMetadata: { frameworks: ["SOC 2 (CC6.1)"], tamperEvident: true },
+    } as unknown as SignedIntent;
+
+    expect(() => verifySignedIntent(malformed)).not.toThrow();
+    expect(verifySignedIntent(malformed)).toEqual({
+      valid: false,
+      reason: expect.stringMatching(/malformed/i),
+    });
+  });
+
+  it("denies a malformed signed intent through the runtime gatekeeper", async () => {
+    const malformed = {
+      intentId: "intent_malformed",
+      agentId: ARMORIQ_AGENT_IDS.REMEDIATION_PATCH_GENERATOR,
+      timestamp: Date.now(),
+      plan: { goal: "Remediate SQL injection" },
+      intentHash: "a".repeat(64),
+      signature: "b".repeat(64),
+      intentToken: "malformed.token.value",
+      complianceMetadata: { frameworks: ["SOC 2 (CC6.1)"], tamperEvident: true },
+    } as unknown as SignedIntent;
+
+    const result = await armorIQRuntimeGatekeeper({
+      agentId: ARMORIQ_AGENT_IDS.REMEDIATION_PATCH_GENERATOR,
+      signedIntent: malformed,
+      toolCall: { action: "generateUnifiedDiff" },
+    });
+
+    expect(result.allowed).toBe(false);
+    expect(result.status).toBe("denied");
+    expect(result.rule).toBe("deny:tampered_intent");
+    expect(result.reason).toContain("malformed");
   });
 
   it("exports pre-execution intent emission via genkit and local-model pipelines", async () => {
