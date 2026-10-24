@@ -103,3 +103,15 @@ export function readStagedContent(path: string): string | null {
     return null;
   }
 }
+
+/**
+ * Detects the currently checked out branch name, or null if detached or outside git repository.
+ */
+export function getCurrentBranch(): string | null {
+  try {
+    const branch = git(["rev-parse", "--abbrev-ref", "HEAD"]).trim();
+    return branch === "HEAD" || branch.length === 0 ? null : branch;
+  } catch {
+    return null;
+  }
+}

@@ -67,6 +67,12 @@ model User {
    */
   slackWebhookUrl String?
 
+  /**
+   * Whether the user has opted in to real-time voice alerts for CRITICAL/HIGH findings.
+   * Disabled by default — users must explicitly enable (#1307).
+   */
+  voiceAlertsEnabled Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -54,6 +54,16 @@ export class ScannerTimeoutError extends Error {
  */
 export { maskSecrets, maskFindingText } from "./secret-masking";
 import { maskFindingText } from "./secret-masking";
+export {
+  applyInlineSuppression,
+  extractDirectivesFromPatch,
+  sanitizeSuppressionReason,
+  type InlineDirective,
+  type SuppressedFinding,
+  type RejectedSuppression,
+  type InlineSuppressionResult,
+} from "./inline-suppression";
+import { applyInlineSuppression, type InlineSuppressionResult } from "./inline-suppression";
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY || "dummy-key-for-build",
@@ -494,6 +504,8 @@ export class ArmorIQScanner {
   getSignatureVersion(): string {
     return dynamicFingerprintEngine.getActiveVersion();
   }
+
+  public lastSuppressionResult: InlineSuppressionResult | null = null;
 
   async scanPullRequest(
     files: FileChange[],
@@ -971,7 +983,10 @@ CRITICAL RULES:
       );
     }
 
-    return allFindings;
+    const suppressionResult = applyInlineSuppression(allFindings, files);
+    this.lastSuppressionResult = suppressionResult;
+
+    return suppressionResult.activeFindings;
   }
 }
 

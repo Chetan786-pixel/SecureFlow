@@ -65,15 +65,15 @@ spec:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           resources:
-            {{- if .Values.worker.resources }}
+            {{- if and .Values.worker.resources .Values.worker.resources.limits .Values.worker.resources.requests }}
             {{- toYaml .Values.worker.resources | nindent 12 }}
             {{- else }}
             limits:
-              cpu: 2000m
-              memory: 2Gi
+              cpu: {{ default "2000m" (dig "limits" "cpu" "2000m" .Values.worker.resources) | quote }}
+              memory: {{ default "2Gi" (dig "limits" "memory" "2Gi" .Values.worker.resources) | quote }}
             requests:
-              cpu: 500m
-              memory: 1Gi
+              cpu: {{ default "500m" (dig "requests" "cpu" "500m" .Values.worker.resources) | quote }}
+              memory: {{ default "1Gi" (dig "requests" "memory" "1Gi" .Values.worker.resources) | quote }}
             {{- end }}
       {{- with .Values.worker.nodeSelector }}
       nodeSelector:

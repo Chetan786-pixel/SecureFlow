@@ -8,6 +8,13 @@ import { Toaster } from "@/components/ui/toaster";
 export const metadata: Metadata = {
   title: "SecureFlow | AI Security Gatekeeper",
   description: "AI-Powered Security Gatekeeper for CI/CD Pull Requests",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
 };
 
 export const viewport: Viewport = {

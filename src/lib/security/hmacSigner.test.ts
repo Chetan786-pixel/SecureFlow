@@ -133,9 +133,8 @@ describe("isWithinReplayWindow", () => {
 describe("admitWebhookRequest", () => {
   const secret = "test-webhook-secret";
   const makeValidRequest = (payload: string) => {
-    const signature = signPayload(payload, secret);
-    const timestamp = Math.floor(Date.now() / 1000).toString();
-    return { signature, timestamp };
+    const ts = Math.floor(Date.now() / 1000);
+    return { signature: signPayload(payload, secret, ts), timestamp: String(ts) };
   };
 
   it("returns ok for a valid request", () => {
@@ -203,8 +202,9 @@ describe("admitWebhookRequest", () => {
 
   it("uses custom replay window", () => {
     const payload = "{}";
-    const signature = signPayload(payload, secret);
-    const timestamp = Math.floor((Date.now() - 30_000) / 1000).toString(); // 30s ago
+    const ts = Math.floor((Date.now() - 30_000) / 1000); // 30s ago
+    const signature = signPayload(payload, secret, ts);
+    const timestamp = String(ts);
 
     // Within 60s window
     expect(admitWebhookRequest(payload, secret, signature, timestamp, 60)).toEqual({
@@ -576,11 +576,60 @@ describe("webhook signature timestamp binding regression suite", () => {
     }
   });
 
-  it("preserves backward compatibility for legacy un-bound bare payload senders", () => {
+  it("refuses a bare-body legacy signature by default, because it signs no timestamp", () => {
     const ts = Math.floor(Date.now() / 1000);
     const bareSig = signPayload(payload, secret); // no timestamp parameter
 
     const result = admitWebhookRequest(payload, secret, bareSig, String(ts));
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.status).toBe(401);
+      expect(result.message).toContain("does not cover the request timestamp");
+    }
+  });
+
+  it("refuses a captured bare-body request replayed with a refreshed timestamp", () => {
+    // Signed a day ago. The attacker only has to rewrite the timestamp header
+    // to now; with the bare-body fallback, that request was admitted forever.
+    const captured = signPayload(payload, secret);
+    const refreshed = String(Math.floor(Date.now() / 1000));
+
+    expect(admitWebhookRequest(payload, secret, captured, refreshed).ok).toBe(false);
+  });
+
+  it("does not let a bound signature pass as a bare one over a different body", () => {
+    // A bound digest is HMAC(`${t}.${body}`), which is also a bare digest of the
+    // body `${t}.${body}`. With the fallback on by default, that body was
+    // admitted at any later time.
+    const ts = Math.floor(Date.now() / 1000) - 86_400;
+    const boundSig = signPayload(payload, secret, ts);
+    const now = String(Math.floor(Date.now() / 1000));
+
+    expect(admitWebhookRequest(`${ts}.${payload}`, secret, boundSig, now).ok).toBe(false);
+  });
+
+  it("admits a bare-body legacy signature only when the caller opts in", () => {
+    const ts = Math.floor(Date.now() / 1000);
+    const bareSig = signPayload(payload, secret);
+
+    const result = admitWebhookRequest(payload, secret, bareSig, String(ts), undefined, {
+      allowUnboundLegacySignatures: true,
+    });
     expect(result).toEqual({ ok: true, scheme: "legacy" });
+  });
+
+  it("keeps rejecting a bad signature with the opt-in on", () => {
+    const ts = Math.floor(Date.now() / 1000);
+
+    const result = admitWebhookRequest(
+      payload,
+      secret,
+      signPayload(payload, "wrong-secret"),
+      String(ts),
+      undefined,
+      { allowUnboundLegacySignatures: true },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toContain("Invalid signature");
   });
 });

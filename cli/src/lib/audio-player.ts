@@ -13,10 +13,12 @@ export interface AudioPlaybackResult {
   error?: string;
 }
 
+export type AudioPlayerEnv = NodeJS.ProcessEnv | Record<string, string | undefined>;
+
 /**
  * Checks if the current process is running in a non-interactive CI/CD environment.
  */
-export function isNonInteractiveCiEnvironment(env: NodeJS.ProcessEnv = process.env): boolean {
+export function isNonInteractiveCiEnvironment(env: AudioPlayerEnv = process.env): boolean {
   return Boolean(
     env.CI === "true" ||
     env.CI === "1" ||
@@ -25,7 +27,10 @@ export function isNonInteractiveCiEnvironment(env: NodeJS.ProcessEnv = process.e
     env.CIRCLECI ||
     env.TRAVIS ||
     env.CONTINUOUS_INTEGRATION ||
-    env.BUILDKITE,
+    env.BUILDKITE ||
+    env.DOCKER === "true" ||
+    env.DOCKER_CONTAINER === "true" ||
+    env.container === "docker",
   );
 }
 
@@ -74,7 +79,7 @@ export function playAudioFile(
   filePath: string,
   options?: {
     platform?: NodeJS.Platform;
-    env?: NodeJS.ProcessEnv;
+    env?: AudioPlayerEnv;
     verbose?: boolean;
     fallbackDir?: string;
   },
@@ -128,7 +133,7 @@ export async function fetchAudioSummary(
   options?: {
     baseUrl?: string;
     files?: StagedFileForAiScan[];
-    env?: NodeJS.ProcessEnv;
+    env?: AudioPlayerEnv;
   },
 ): Promise<Buffer | null> {
   const env = options?.env ?? process.env;
@@ -157,6 +162,14 @@ export async function fetchAudioSummary(
       if (response.ok) {
         const arrayBuf = await response.arrayBuffer();
         return Buffer.from(arrayBuf);
+      }
+
+      if (response.status === 429) {
+        console.warn("⚠️  [SecureFlow] ElevenLabs rate limit reached (429 Too Many Requests).");
+      } else if (response.status === 401) {
+        console.warn(
+          "⚠️  [SecureFlow] ElevenLabs authentication failed (401 Unauthorized). Check API key.",
+        );
       }
     } catch {
       // Fallback to /api/cli/scan
@@ -196,6 +209,21 @@ export async function fetchAudioSummary(
 }
 
 /**
+ * Safely removes a temporary file, suppressing any filesystem errors.
+ */
+export function cleanupTempFile(filePath: string): boolean {
+  try {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      return true;
+    }
+  } catch {
+    // Gracefully ignore cleanup errors
+  }
+  return false;
+}
+
+/**
  * Coordinates fetching and playing the voice summary debrief.
  */
 export async function playVoiceDebrief(
@@ -203,9 +231,11 @@ export async function playVoiceDebrief(
   options?: {
     baseUrl?: string;
     files?: StagedFileForAiScan[];
-    env?: NodeJS.ProcessEnv;
+    env?: AudioPlayerEnv;
     verbose?: boolean;
     fallbackDir?: string;
+    keepTempFile?: boolean;
+    platform?: NodeJS.Platform;
   },
 ): Promise<AudioPlaybackResult> {
   const env = options?.env ?? process.env;
@@ -217,16 +247,21 @@ export async function playVoiceDebrief(
   }
 
   const audioBuffer = await fetchAudioSummary(summaryText, options);
-  if (!audioBuffer || audioBuffer.length === 0) {
-    const tempPath = path.join(os.tmpdir(), `secureflow-summary-${Date.now()}.mp3`);
-    fs.writeFileSync(
-      tempPath,
-      Buffer.from("ID3\x04\x00\x00\x00\x00\x00#TSSE\x00\x00\x00\x0f\x00\x00\x03Lavf58.29.100\x00"),
-    );
-    return playAudioFile(tempPath, options);
-  }
+  const tempPath = path.join(
+    os.tmpdir(),
+    `secureflow-summary-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.mp3`,
+  );
+  const bufferToWrite =
+    !audioBuffer || audioBuffer.length === 0
+      ? Buffer.from("ID3\x04\x00\x00\x00\x00\x00#TSSE\x00\x00\x00\x0f\x00\x00\x03Lavf58.29.100\x00")
+      : audioBuffer;
 
-  const tempPath = path.join(os.tmpdir(), `secureflow-summary-${Date.now()}.mp3`);
-  fs.writeFileSync(tempPath, audioBuffer);
-  return playAudioFile(tempPath, options);
+  try {
+    fs.writeFileSync(tempPath, bufferToWrite);
+    return playAudioFile(tempPath, options);
+  } finally {
+    if (!options?.keepTempFile) {
+      cleanupTempFile(tempPath);
+    }
+  }
 }

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { triggerRepositorySync } from "./sync-repositories";
 import * as authModule from "@/auth";
 import * as syncEngine from "@/lib/github/sync-user-repos";
+import { captureGitHubAccessToken } from "@/lib/github/oauth-token-capture";
 
 vi.mock("@/auth", () => ({
   auth: vi.fn(),
@@ -26,10 +27,12 @@ describe("triggerRepositorySync Server Action (#634)", () => {
   });
 
   it("executes repository sync when user is authenticated", async () => {
-    vi.mocked(authModule.auth).mockResolvedValue({
-      user: { id: "user-456", githubLogin: "dev_heist" },
-      accessToken: "gho_token_abc",
-    } as any);
+    // As NextAuth does: the session callback sees the GitHub token, the
+    // session it returns does not carry it.
+    vi.mocked(authModule.auth).mockImplementation((async () => {
+      captureGitHubAccessToken("gho_token_abc");
+      return { user: { id: "user-456", githubLogin: "dev_heist" } };
+    }) as any);
 
     vi.spyOn(syncEngine, "syncUserRepositories").mockResolvedValue({
       synced: 3,

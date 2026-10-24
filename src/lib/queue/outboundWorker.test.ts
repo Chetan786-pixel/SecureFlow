@@ -3,10 +3,28 @@ import { Job, UnrecoverableError } from "bullmq";
 import { processOutboundWebhook } from "./outboundWorker";
 import { SIGNATURE_HEADER, DELIVERY_HEADER, verifySignatureHeader } from "./outbound-dispatch";
 
+// Dispatch connects through `pinnedTransport`, not the global `fetch`. Send it
+// back through `fetch` so the stubs in this file see each request. Pinning is
+// covered in src/lib/queue/outbound-dispatch.test.ts.
+vi.mock("./outbound-dispatch", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./outbound-dispatch")>();
+  return {
+    ...actual,
+    dispatchOutboundWebhook: (
+      request: Parameters<typeof actual.dispatchOutboundWebhook>[0],
+      options: Parameters<typeof actual.dispatchOutboundWebhook>[1] = {},
+    ) =>
+      actual.dispatchOutboundWebhook(request, {
+        fetchImpl: (url, init) => fetch(url, init),
+        ...options,
+      }),
+  };
+});
+
 /**
- * These exercise the real dispatch path with a stubbed `fetch`, so the
- * destination checks, the redirect policy and the retry classification are all
- * live rather than mocked away.
+ * These exercise the real dispatch path with a stubbed `fetch` (through the
+ * adapter above), so the destination checks, the redirect policy and the retry
+ * classification are all live rather than mocked away.
  *
  * `assertDispatchableUrl` short-circuits before DNS for literal addresses, so
  * the hosts below are literals and the suite never touches a resolver.

@@ -9,7 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { withWebhookGuard } from "@/lib/security/webhookGuard";
+import { resolveMaxWebhookBodyBytes, withWebhookGuard } from "@/lib/security/webhookGuard";
 import { withErrorHandler, AppError } from "@/lib/middleware/error-handler";
 import { createLogger } from "@/lib/logger";
 
@@ -179,6 +179,14 @@ export function createInboundWebhookHandler(config: InboundWebhookConfig) {
       {
         get secret() {
           return config.readSecret() ?? "";
+        },
+        get maxBodyBytes() {
+          return resolveMaxWebhookBodyBytes(process.env.WEBHOOK_MAX_BYTES);
+        },
+        // Migration switch for senders still signing the bare body. Off unless
+        // explicitly "true"; see `allowUnboundLegacySignatures`.
+        get allowUnboundLegacySignatures() {
+          return process.env.WEBHOOK_ALLOW_UNBOUND_LEGACY_SIGNATURES?.trim() === "true";
         },
       },
     ),

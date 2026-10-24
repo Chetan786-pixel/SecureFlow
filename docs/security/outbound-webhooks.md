@@ -6,7 +6,8 @@ an address someone else chose, from inside our network, with Redis and Postgres
 reachable. This page describes the controls that bound it.
 
 Everything below is implemented in `src/lib/queue/outbound-dispatch.ts` and
-exercised by `src/lib/queue/outbound-dispatch.test.ts`.
+exercised by `src/lib/queue/outbound-dispatch.test.ts` and
+`src/lib/queue/outbound-dispatch.pinning.test.ts`.
 
 ## Destination policy
 
@@ -26,6 +27,28 @@ The last row is the one that matters most. Checking only the hostname is not a
 control: `hooks.attacker.example` is a perfectly ordinary public name, and it
 can answer `127.0.0.1`. We resolve the name and reject the destination if _any_
 returned address is internal.
+
+### The connection uses the address that was checked
+
+Resolving the name, checking the answer and then handing the URL to `fetch`
+is not enough: `fetch` resolves the name again, and a DNS server that answers
+with a zero TTL can return a public address to the check and
+`169.254.169.254` to the connection.
+
+So the check returns the addresses it approved, and the request is sent by
+`pinnedTransport`, which connects only to those. It is built on `http`/`https`
+with a `lookup` hook that answers from the approved list and never queries
+DNS. Only address resolution changes. The hostname is still what TLS uses for
+SNI and for certificate verification, and still what the `Host` header
+carries. Each request gets its own non-pooled agent, so it never reuses a
+keep-alive socket that some other code connected.
+
+IPv6 answers are parsed into hextets before they are classified. Every format
+that wraps an IPv4 address (IPv4-mapped, IPv4-compatible, SIIT, NAT64
+`64:ff9b::/96`, 6to4 `2002::/16`) is judged by the IPv4 address inside it, and
+Teredo, local-use NAT64, documentation and site-local ranges are refused. This
+matters because `getaddrinfo` returns a NAT64 answer for the metadata service
+as `64:ff9b::a9fe:a9fe`, a spelling a check on dotted quads never sees.
 
 Obfuscated spellings of loopback (`0x7f.0.0.1`, `2130706433`, `0177.0.0.1`,
 `[::ffff:127.0.0.1]`) are handled by checking `url.hostname` after parsing

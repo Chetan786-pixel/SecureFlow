@@ -39,6 +39,7 @@ import {
 import { sanitizeLogValue } from "@/lib/logger";
 import { getActivePoliciesForUser } from "@/lib/policies/policy-cache";
 import { notifyHighSeverityFindings } from "@/lib/integrations/slack";
+import { publishVoiceAlert } from "@/lib/voice-alert-events";
 import { mapWithConcurrency } from "@/lib/utils/concurrency";
 
 // Sanitize user-controlled strings before logging to prevent log injection
@@ -948,6 +949,8 @@ export const worker = new Worker<WebhookJobData>(
                 totalFindings: enrichedFindings.length,
                 inlineCount: inlineComments.length,
                 coverageNotice,
+                suppressedFindings: scanner.lastSuppressionResult?.suppressedFindings,
+                rejectedSuppressions: scanner.lastSuppressionResult?.rejectedSuppressions,
               });
 
             // Try to post the anchored findings as an inline review. If that fails
@@ -1089,6 +1092,25 @@ export const worker = new Worker<WebhookJobData>(
                 });
               } catch (err) {
                 console.error(`[Worker] Slack notification step failed:`, err);
+              }
+            }
+
+            // Real-time voice alert for CRITICAL/HIGH findings (#1307). Best-effort,
+            // non-throwing so a Redis failure cannot retry an already-persisted scan.
+            if (userId && enrichedFindings.length > 0) {
+              const topSeverityFinding =
+                enrichedFindings.find((f: any) => f.severity === "CRITICAL") ??
+                enrichedFindings.find((f: any) => f.severity === "HIGH");
+              if (topSeverityFinding) {
+                publishVoiceAlert(userId, {
+                  repositoryFullName: repository.full_name,
+                  prNumber: pull_request.number,
+                  decision: decision === "BLOCKED" ? "BLOCK" : "REVIEW",
+                  topSeverity: topSeverityFinding.severity,
+                  alertId: deliveryId ?? crypto.randomUUID(),
+                }).catch((err: unknown) =>
+                  console.error("[Worker] Voice alert publish failed:", err),
+                );
               }
             }
           }

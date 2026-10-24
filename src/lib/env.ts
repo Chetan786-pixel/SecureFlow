@@ -19,6 +19,8 @@ const envSchema = z.object({
   // Optional
   DB_POOL_MAX: z.string().optional(),
   GITHUB_WEBHOOK_MAX_BYTES: z.string().optional(),
+  WEBHOOK_MAX_BYTES: z.string().optional(),
+  WEBHOOK_ALLOW_UNBOUND_LEGACY_SIGNATURES: z.string().optional(),
   GITHUB_APP_URL: z.string().optional(),
   ARMORIQ_API_KEY: z.string().optional(),
   USER_ID: z.string().optional(),
@@ -48,6 +50,12 @@ const envSchema = z.object({
   OUTBOUND_WEBHOOK_ALLOWED_HOSTS: z.string().optional(),
   OUTBOUND_WEBHOOK_ALLOW_INSECURE_HTTP: z.string().optional(),
   OUTBOUND_WEBHOOK_ALLOW_PRIVATE_NETWORKS: z.string().optional(),
+  ELEVENLABS_API_KEY: z.string().optional(),
+  ELEVENLABS_VOICE_ID_DEFAULT: z.string().optional(),
+  ELEVENLABS_VOICE_ID_ALERT: z.string().optional(),
+  ELEVENLABS_VOICE_ID_HEIST: z.string().optional(),
+  ELEVENLABS_MODEL_ID: z.string().optional(),
+  AUDIO_CACHE_TTL_SECONDS: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

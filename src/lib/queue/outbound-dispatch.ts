@@ -27,10 +27,23 @@
  * DNS is resolved before the socket is opened and the *resolved addresses* are
  * checked, not just the hostname. A name that looks external and answers with
  * `127.0.0.1` is the standard way around a hostname allowlist.
+ *
+ * The socket is then opened to one of exactly those addresses
+ * ({@link pinnedTransport}). Checking the answer and then handing the hostname
+ * to `fetch` would resolve it a second time, and a DNS server with a zero TTL
+ * can answer the check with a public address and the connection with
+ * `169.254.169.254`. Only address resolution is replaced: TLS still verifies
+ * the certificate against the hostname, SNI still carries it, and the `Host`
+ * header is unchanged.
  */
 
 import { createHmac, randomUUID, timingSafeEqual } from "crypto";
+import type { LookupAddress } from "dns";
 import { lookup as dnsLookup } from "dns/promises";
+import http from "http";
+import https from "https";
+import { isIP, type LookupFunction } from "net";
+import { Readable } from "stream";
 
 /** Default per-request deadline. Generous for a webhook, far short of forever. */
 export const DEFAULT_TIMEOUT_MS = 10_000;
@@ -203,21 +216,69 @@ export function isPrivateIPv4(value: string): boolean {
   return false;
 }
 
-/** Render the last two hextets of an IPv4-mapped address as a dotted quad. */
-function hextetsToIPv4(high: string, low: string): string {
-  const a = Number.parseInt(high, 16);
-  const b = Number.parseInt(low, 16);
-  return `${(a >> 8) & 0xff}.${a & 0xff}.${(b >> 8) & 0xff}.${b & 0xff}`;
+/** Render two hextets as a dotted quad. */
+function hextetsToIPv4(high: number, low: number): string {
+  return `${(high >> 8) & 0xff}.${high & 0xff}.${(low >> 8) & 0xff}.${low & 0xff}`;
+}
+
+/**
+ * Expand an IPv6 literal into its eight hextets, or null if it is not one.
+ *
+ * Accepts `::` compression and a trailing dotted quad (`::ffff:1.2.3.4`).
+ */
+function parseIPv6(value: string): number[] | null {
+  let text = value;
+  let tail: number[] | null = null;
+
+  const dotted = text.match(/^(.*:)(\d{1,3}(?:\.\d{1,3}){3})$/);
+  if (dotted) {
+    const octets = parseIPv4(dotted[2]);
+    if (!octets) return null;
+    tail = [(octets[0] << 8) | octets[1], (octets[2] << 8) | octets[3]];
+    text = `${dotted[1]}0:0`;
+  }
+
+  const halves = text.split("::");
+  if (halves.length > 2) return null;
+
+  const toHextets = (part: string) =>
+    part === ""
+      ? []
+      : part.split(":").map((group) => (/^[0-9a-f]{1,4}$/.test(group) ? parseInt(group, 16) : NaN));
+
+  const head = toHextets(halves[0]);
+  const rest = halves.length === 2 ? toHextets(halves[1]) : [];
+  if ([...head, ...rest].some(Number.isNaN)) return null;
+
+  let hextets: number[];
+  if (halves.length === 2) {
+    const gap = 8 - head.length - rest.length;
+    if (gap < 1) return null;
+    hextets = [...head, ...new Array<number>(gap).fill(0), ...rest];
+  } else {
+    if (head.length !== 8) return null;
+    hextets = head;
+  }
+
+  if (tail) {
+    hextets[6] = tail[0];
+    hextets[7] = tail[1];
+  }
+  return hextets;
 }
 
 /**
  * True when an IPv6 literal names something that is not a public peer.
  *
- * IPv4-mapped forms are unwrapped and re-checked as IPv4 — skipping that step
- * is the most common way an IPv6-aware blocklist gets bypassed. Both spellings
- * have to be handled: a caller may write `::ffff:127.0.0.1`, but the WHATWG URL
- * parser canonicalises that to the hextet form `::ffff:7f00:1` before we ever
- * read `url.hostname`, so matching only the dotted form catches nothing.
+ * Every format that carries an IPv4 address is unwrapped and the IPv4 address
+ * is checked instead: IPv4-mapped, IPv4-compatible, SIIT, NAT64 (`64:ff9b::/96`)
+ * and 6to4 (`2002::/16`). Skipping that step is the most common way an
+ * IPv6-aware blocklist gets bypassed. The check runs on parsed hextets, not on
+ * the spelling: the WHATWG URL parser rewrites `::ffff:127.0.0.1` to
+ * `::ffff:7f00:1`, and `getaddrinfo` returns NAT64 answers as
+ * `64:ff9b::a9fe:a9fe`, so a pattern on the dotted form catches neither.
+ *
+ * Anything that does not parse is treated as private.
  */
 export function isPrivateIPv6(value: string): boolean {
   const normalized = value
@@ -225,23 +286,34 @@ export function isPrivateIPv6(value: string): boolean {
     .replace(/^\[|\]$/g, "")
     .split("%")[0];
 
-  if (normalized === "::" || normalized === "::1") return true;
+  // A dotted quad trailing an arbitrary prefix is how a 6to4 or NAT64 address
+  // is usually written by hand.
+  const trailing = normalized.match(/(\d{1,3}(?:\.\d{1,3}){3})$/);
+  if (trailing && isPrivateIPv4(trailing[1])) return true;
 
-  // ::ffff:127.0.0.1 and the deprecated IPv4-compatible ::127.0.0.1
-  const dotted = normalized.match(/^::(?:ffff:)?(\d{1,3}(?:\.\d{1,3}){3})$/);
-  if (dotted) return isPrivateIPv4(dotted[1]);
+  const h = parseIPv6(normalized);
+  if (!h) return true;
 
-  // ::ffff:7f00:1 — the form Node's URL parser actually produces.
-  const hextets = normalized.match(/^::(?:ffff:)?([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
-  if (hextets) return isPrivateIPv4(hextetsToIPv4(hextets[1], hextets[2]));
+  const zeroUpTo = (count: number) => h.slice(0, count).every((hextet) => hextet === 0);
+  const embedded = (from: number) => hextetsToIPv4(h[from], h[from + 1]);
 
-  // 6to4 / NAT64 wrappers that trail a dotted quad.
-  const embedded = normalized.match(/(\d{1,3}(?:\.\d{1,3}){3})$/);
-  if (embedded && isPrivateIPv4(embedded[1])) return true;
-
-  if (/^f[cd][0-9a-f]{2}:/.test(normalized)) return true; // fc00::/7 unique-local
-  if (/^fe[89ab][0-9a-f]:/.test(normalized)) return true; // fe80::/10 link-local
-  if (/^ff[0-9a-f]{2}:/.test(normalized)) return true; // ff00::/8 multicast
+  if (zeroUpTo(7) && (h[7] === 0 || h[7] === 1)) return true; // :: and ::1
+  if (zeroUpTo(5) && (h[5] === 0xffff || h[5] === 0)) return isPrivateIPv4(embedded(6)); // mapped, compatible
+  if (zeroUpTo(4) && h[4] === 0xffff && h[5] === 0) return isPrivateIPv4(embedded(6)); // SIIT
+  if (h[0] === 0x64 && h[1] === 0xff9b) {
+    // 64:ff9b::/96 translates to the IPv4 address in its last 32 bits. The
+    // rest of 64:ff9b::/32, including local-use 64:ff9b:1::/48, translates to
+    // wherever the operator chose, so none of it is treated as public.
+    return h.slice(2, 6).every((hextet) => hextet === 0) ? isPrivateIPv4(embedded(6)) : true;
+  }
+  if (h[0] === 0x2002) return isPrivateIPv4(embedded(1)); // 6to4
+  if (h[0] === 0x2001 && h[1] === 0) return true; // Teredo: carries an obfuscated IPv4 client
+  if (h[0] === 0x2001 && h[1] === 0x0db8) return true; // documentation
+  if (h[0] === 0x0100 && h.slice(1, 4).every((hextet) => hextet === 0)) return true; // 100::/64 discard
+  if ((h[0] & 0xfe00) === 0xfc00) return true; // fc00::/7 unique-local
+  if ((h[0] & 0xffc0) === 0xfe80) return true; // fe80::/10 link-local
+  if ((h[0] & 0xffc0) === 0xfec0) return true; // fec0::/10 site-local (deprecated, still routed by some stacks)
+  if ((h[0] & 0xff00) === 0xff00) return true; // ff00::/8 multicast
 
   return false;
 }
@@ -286,18 +358,44 @@ export interface ValidateDestinationOptions {
   resolve?: AddressResolver;
 }
 
+/** A destination that passed {@link resolveDispatchTarget}. */
+export interface DispatchTarget {
+  url: URL;
+  /**
+   * The addresses the hostname resolved to when it was checked. The
+   * connection must go to one of these, and the name must not be resolved
+   * again. `null` when there is nothing to pin: the host is an address literal
+   * (already checked), or private networks are allowed outside production.
+   */
+  addresses: string[] | null;
+}
+
 /**
  * Validate a destination and return the parsed URL, or throw.
+ *
+ * Kept for callers that only need the verdict. Dispatch uses
+ * {@link resolveDispatchTarget}, because connecting to the URL's hostname
+ * after this returns would resolve it again.
+ */
+export async function assertDispatchableUrl(
+  rawUrl: string,
+  options: ValidateDestinationOptions = {},
+): Promise<URL> {
+  return (await resolveDispatchTarget(rawUrl, options)).url;
+}
+
+/**
+ * Validate a destination and return it with the addresses that were checked.
  *
  * The order matters. Syntax and scheme are cheap and are checked first; the
  * allowlist is checked before DNS so an allowlisted deployment never pays for a
  * lookup it is going to ignore; the resolved addresses are checked last because
  * that is the only step that can fail for reasons unrelated to the URL.
  */
-export async function assertDispatchableUrl(
+export async function resolveDispatchTarget(
   rawUrl: string,
   options: ValidateDestinationOptions = {},
-): Promise<URL> {
+): Promise<DispatchTarget> {
   const config = options.config ?? resolveDispatchConfig();
   const resolve = options.resolve ?? defaultResolver;
 
@@ -339,7 +437,7 @@ export async function assertDispatchableUrl(
   }
 
   if (config.allowPrivateNetworks) {
-    return url;
+    return { url, addresses: null };
   }
 
   if (isBlockedHostname(hostname)) {
@@ -354,9 +452,8 @@ export async function assertDispatchableUrl(
     );
   }
 
-  const isLiteral = /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname) || hostname.includes(":");
-  if (isLiteral) {
-    return url;
+  if (isIP(hostname) !== 0) {
+    return { url, addresses: null };
   }
 
   let addresses: string[];
@@ -372,14 +469,14 @@ export async function assertDispatchableUrl(
     throw new OutboundDeliveryError(`Webhook host "${hostname}" resolved to no addresses.`, true);
   }
 
-  const internal = addresses.find((address) => isPrivateAddress(address));
+  const internal = addresses.find((address) => isIP(address) === 0 || isPrivateAddress(address));
   if (internal) {
     throw new OutboundDestinationError(
       `Host "${hostname}" resolves to the internal address ${internal}.`,
     );
   }
 
-  return url;
+  return { url, addresses };
 }
 
 /**
@@ -483,6 +580,152 @@ export async function drainBody(response: Response, limit: number): Promise<stri
   return new TextDecoder().decode(merged);
 }
 
+/** Address family as `net` reports it: 4, 6, or 0 for "either". */
+function lookupFamily(family: number | string | undefined): 0 | 4 | 6 {
+  if (family === 4 || family === "IPv4") return 4;
+  if (family === 6 || family === "IPv6") return 6;
+  return 0;
+}
+
+/**
+ * A `lookup` for `net.connect` that answers with addresses already validated
+ * for `hostname`, and never queries DNS.
+ *
+ * Handles both calling conventions `net` uses: a single address, and
+ * `{ all: true }` when happy-eyeballs (`autoSelectFamily`, on by default since
+ * Node 20) wants every candidate. Asked about any other name, it fails rather
+ * than resolving it: a connection to an unvalidated name is the failure this
+ * exists to prevent.
+ */
+export function createPinnedLookup(hostname: string, addresses: string[]): LookupFunction {
+  const pinnedHost = hostname.toLowerCase();
+  const records: LookupAddress[] = addresses
+    .map((address) => ({ address, family: isIP(address) }))
+    .filter((record) => record.family !== 0);
+
+  return (requested, options, callback) => {
+    const family = lookupFamily(options?.family);
+    const candidates =
+      requested.toLowerCase() === pinnedHost
+        ? records.filter((record) => family === 0 || record.family === family)
+        : [];
+
+    if (candidates.length === 0) {
+      const error: NodeJS.ErrnoException = new Error(
+        `No validated address for "${requested}"; refusing to resolve it at connect time.`,
+      );
+      error.code = "ENOTFOUND";
+      callback(error, options?.all ? [] : "", 0);
+      return;
+    }
+
+    if (options?.all) {
+      callback(null, candidates);
+    } else {
+      callback(null, candidates[0].address, candidates[0].family);
+    }
+  };
+}
+
+/** Request options {@link pinnedTransport} honours. */
+export interface TransportInit {
+  method?: string;
+  headers?: HeadersInit;
+  body?: string;
+  signal?: AbortSignal;
+}
+
+/**
+ * Sends a request. The default, {@link pinnedTransport}, connects only to
+ * `target.addresses`; a replacement has to honour them itself.
+ */
+export type DispatchTransport = (
+  url: string,
+  init: TransportInit & RequestInit,
+  target: DispatchTarget,
+) => Promise<Response>;
+
+/** Statuses whose response may not carry a body under the Fetch spec. */
+const NULL_BODY_STATUSES = new Set([101, 103, 204, 205, 304]);
+
+/** Wrap a Node response as a Fetch `Response` so the rest of dispatch is transport-agnostic. */
+function toFetchResponse(message: http.IncomingMessage): Response {
+  const status = message.statusCode ?? 0;
+  const headers = new Headers();
+  for (const [name, value] of Object.entries(message.headers)) {
+    if (value === undefined) continue;
+    for (const item of Array.isArray(value) ? value : [value]) headers.append(name, item);
+  }
+
+  if (NULL_BODY_STATUSES.has(status)) {
+    message.resume();
+    return new Response(null, { status, statusText: message.statusMessage, headers });
+  }
+
+  return new Response(Readable.toWeb(message) as ReadableStream<Uint8Array>, {
+    status,
+    statusText: message.statusMessage,
+    headers,
+  });
+}
+
+/**
+ * Send one request over a connection to a validated address.
+ *
+ * Built on `http`/`https` rather than `fetch` because the global `fetch` has no
+ * supported way to control address resolution for a single request. The
+ * `lookup` hook replaces resolution and nothing else: the hostname is still
+ * what `tls.connect` uses for SNI and certificate verification, and still what
+ * the `Host` header carries.
+ *
+ * `agent: false` gives the request a fresh, non-pooled agent. A keep-alive
+ * socket opened elsewhere to the same host:port would have been connected by
+ * a lookup we did not control.
+ *
+ * Redirects are never followed; `http.request` has no such behaviour.
+ */
+export function pinnedTransport(
+  url: string,
+  init: TransportInit,
+  target: DispatchTarget,
+): Promise<Response> {
+  const parsed = new URL(url);
+  const client = parsed.protocol === "https:" ? https : http;
+  const hostname = parsed.hostname.replace(/^\[|\]$/g, "");
+
+  const headers: Record<string, string> = {};
+  new Headers(init.headers).forEach((value, name) => {
+    headers[name] = value;
+  });
+  if (init.body !== undefined) {
+    headers["content-length"] = String(Buffer.byteLength(init.body));
+  }
+
+  return new Promise<Response>((resolve, reject) => {
+    const request = client.request(
+      parsed,
+      {
+        method: init.method ?? "GET",
+        headers,
+        agent: false,
+        signal: init.signal,
+        ...(target.addresses ? { lookup: createPinnedLookup(hostname, target.addresses) } : {}),
+      },
+      (message) => {
+        try {
+          resolve(toFetchResponse(message));
+        } catch (error) {
+          message.destroy();
+          reject(error);
+        }
+      },
+    );
+
+    request.on("error", reject);
+    request.end(init.body);
+  });
+}
+
 export interface OutboundWebhookRequest {
   url: string;
   payload: Record<string, unknown> | string;
@@ -494,8 +737,12 @@ export interface OutboundWebhookRequest {
 export interface DispatchOptions {
   config?: DispatchConfig;
   resolve?: AddressResolver;
-  /** Injected so tests do not need a live socket. */
-  fetchImpl?: typeof fetch;
+  /**
+   * Replaces {@link pinnedTransport}. Injected so tests do not need a live
+   * socket; anything else passed here is responsible for connecting only to
+   * `target.addresses`.
+   */
+  fetchImpl?: DispatchTransport;
   now?: () => number;
   /** Injected so a signature can be asserted deterministically. */
   deliveryId?: string;
@@ -522,10 +769,11 @@ export async function dispatchOutboundWebhook(
   options: DispatchOptions = {},
 ): Promise<DispatchResult> {
   const config = options.config ?? resolveDispatchConfig();
-  const doFetch = options.fetchImpl ?? fetch;
+  const doFetch = options.fetchImpl ?? pinnedTransport;
   const now = options.now ?? Date.now;
 
-  const url = await assertDispatchableUrl(request.url, { config, resolve: options.resolve });
+  const target = await resolveDispatchTarget(request.url, { config, resolve: options.resolve });
+  const { url } = target;
   const destination = describeDestination(url);
   const deliveryId = options.deliveryId ?? request.deliveryId ?? randomUUID();
 
@@ -548,14 +796,18 @@ export async function dispatchOutboundWebhook(
   let response: Response;
 
   try {
-    response = await doFetch(url.toString(), {
-      method: "POST",
-      headers,
-      body,
-      // A 3xx is a destination we have not validated. Never follow it.
-      redirect: "manual",
-      signal: AbortSignal.timeout(config.timeoutMs),
-    });
+    response = await doFetch(
+      url.toString(),
+      {
+        method: "POST",
+        headers,
+        body,
+        // A 3xx is a destination we have not validated. Never follow it.
+        redirect: "manual",
+        signal: AbortSignal.timeout(config.timeoutMs),
+      },
+      target,
+    );
   } catch (error) {
     const isTimeout =
       error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");

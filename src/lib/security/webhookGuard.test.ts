@@ -1,13 +1,16 @@
 import { describe, it, expect, vi } from "vitest";
+import { createHmac } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 import {
+  DEFAULT_MAX_WEBHOOK_BODY_BYTES,
   isUsableSecret,
+  resolveMaxWebhookBodyBytes,
   signOutboundWebhook,
   verifyWebhookRequest,
   withWebhookGuard,
 } from "./webhookGuard";
-import { signPayload, SIGNATURE_HEADER, TIMESTAMP_HEADER } from "./hmacSigner";
+import { signPayload, signPayloadV1, SIGNATURE_HEADER, TIMESTAMP_HEADER } from "./hmacSigner";
 
 const SECRET = "test-webhook-secret";
 
@@ -28,7 +31,7 @@ function makeRequest(
   const headers: Record<string, string> = { "Content-Type": "application/json" };
 
   if (!omit.includes("signature")) {
-    headers[SIGNATURE_HEADER] = signature ?? signPayload(body, secret);
+    headers[SIGNATURE_HEADER] = signature ?? signPayload(body, secret, timestampSeconds);
   }
   if (!omit.includes("timestamp")) {
     headers[TIMESTAMP_HEADER] = String(timestampSeconds);
@@ -288,11 +291,12 @@ describe("verifyWebhookRequest", () => {
 
   it("honours custom header names", async () => {
     const body = "{}";
+    const ts = Math.floor(Date.now() / 1000);
     const req = new NextRequest("https://securefl.ow/api/webhooks", {
       method: "POST",
       headers: {
-        "X-Vendor-Signature": signPayload(body, SECRET),
-        "X-Vendor-Timestamp": String(Math.floor(Date.now() / 1000)),
+        "X-Vendor-Signature": signPayload(body, SECRET, ts),
+        "X-Vendor-Timestamp": String(ts),
       },
       body,
     });
@@ -342,5 +346,257 @@ describe("signOutboundWebhook", () => {
     expect(() => signOutboundWebhook("{}", "")).toThrow(/without a secret/);
     expect(() => signOutboundWebhook("{}", undefined)).toThrow(/without a secret/);
     expect(() => signOutboundWebhook("{}", "   ")).toThrow(/without a secret/);
+  });
+});
+
+/** A v1 signature over raw bytes, the way a sender that never decodes its body signs it. */
+function signBytesV1(bytes: Uint8Array, secret: string, timestampSeconds: number): string {
+  const digest = createHmac("sha256", secret)
+    .update(`${timestampSeconds}.`)
+    .update(bytes)
+    .digest("hex");
+  return `t=${timestampSeconds},v1=${digest}`;
+}
+
+/**
+ * A request whose body arrives as a stream with no Content-Length, as a
+ * chunked request does. Counts how much of it was pulled, and never ends on
+ * its own when `endless` is set.
+ */
+function streamingRequest(
+  chunk: Uint8Array,
+  { chunks = 1, endless = false, headers = {} as Record<string, string> } = {},
+) {
+  const stats = { pulled: 0, cancelled: false };
+  const body = new ReadableStream<Uint8Array>(
+    {
+      pull(controller) {
+        if (!endless && stats.pulled >= chunks) {
+          controller.close();
+          return;
+        }
+        stats.pulled += 1;
+        controller.enqueue(chunk);
+      },
+      cancel() {
+        stats.cancelled = true;
+      },
+    },
+    // Pull only when read, so `pulled` counts what the reader consumed.
+    { highWaterMark: 0 },
+  );
+  const req = new NextRequest("https://securefl.ow/api/webhooks", {
+    method: "POST",
+    headers,
+    body,
+    // Required by undici for a streamed request body.
+    duplex: "half",
+  });
+  return { req, stats };
+}
+
+const nowSeconds = () => Math.floor(Date.now() / 1000);
+
+describe("withWebhookGuard — body size cap", () => {
+  it("refuses a declared-oversized body without reading it", async () => {
+    const body = "x".repeat(64);
+    const ts = nowSeconds();
+    const { req, stats } = streamingRequest(new TextEncoder().encode(body), {
+      headers: {
+        "content-length": String(DEFAULT_MAX_WEBHOOK_BODY_BYTES + 1),
+        [SIGNATURE_HEADER]: signPayloadV1(body, SECRET, ts),
+        [TIMESTAMP_HEADER]: String(ts),
+      },
+    });
+    const { handler } = recordingHandler();
+
+    const res = await withWebhookGuard(handler, { secret: SECRET })(req);
+
+    expect(res.status).toBe(413);
+    expect(handler).not.toHaveBeenCalled();
+    expect(stats.pulled).toBe(0);
+  });
+
+  it("stops reading a chunked body once it passes the cap", async () => {
+    // No Content-Length and no end: without a streaming cap this never returns.
+    const { req, stats } = streamingRequest(new Uint8Array(256).fill(0x61), { endless: true });
+    const { handler } = recordingHandler();
+
+    const res = await withWebhookGuard(handler, { secret: SECRET, maxBodyBytes: 1024 })(req);
+
+    expect(res.status).toBe(413);
+    expect(handler).not.toHaveBeenCalled();
+    expect(stats.cancelled).toBe(true);
+    expect(stats.pulled).toBeLessThanOrEqual(1024 / 256 + 2);
+  });
+
+  it("counts the bytes received, not the Content-Length claimed", async () => {
+    const { req } = streamingRequest(new Uint8Array(512).fill(0x61), {
+      chunks: 4,
+      headers: { "content-length": "16" },
+    });
+    const { handler } = recordingHandler();
+
+    const res = await withWebhookGuard(handler, { secret: SECRET, maxBodyBytes: 1024 })(req);
+
+    expect(res.status).toBe(413);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("admits a signed chunked body under the cap", async () => {
+    const body = JSON.stringify({ event: "ping", padding: "y".repeat(200) });
+    const ts = nowSeconds();
+    const { req } = streamingRequest(new TextEncoder().encode(body), {
+      headers: {
+        [SIGNATURE_HEADER]: signPayloadV1(body, SECRET, ts),
+        [TIMESTAMP_HEADER]: String(ts),
+      },
+    });
+    const { handler, calls } = recordingHandler();
+
+    const res = await withWebhookGuard(handler, { secret: SECRET, maxBodyBytes: 1024 })(req);
+
+    expect(res.status).toBe(200);
+    expect(calls).toEqual([body]);
+  });
+
+  it("admits a body exactly at the cap", async () => {
+    const { handler } = recordingHandler();
+
+    const res = await withWebhookGuard(handler, { secret: SECRET, maxBodyBytes: 1024 })(
+      makeRequest("z".repeat(1024)),
+    );
+
+    expect(res.status).toBe(200);
+  });
+
+  it("verifies the signature over the bytes received, not a re-encoded string", async () => {
+    // 0xff is not valid UTF-8. Decoding turns it into U+FFFD, which re-encodes
+    // as three different bytes, so a digest over `req.text()` could never
+    // match what the sender signed.
+    const bytes = new Uint8Array([0x7b, 0x22, 0x61, 0x22, 0x3a, 0xff, 0x7d]);
+    const ts = nowSeconds();
+    const { req } = streamingRequest(bytes, {
+      headers: {
+        [SIGNATURE_HEADER]: signBytesV1(bytes, SECRET, ts),
+        [TIMESTAMP_HEADER]: String(ts),
+      },
+    });
+    const { handler, calls } = recordingHandler();
+
+    const res = await withWebhookGuard(handler, { secret: SECRET })(req);
+
+    expect(res.status).toBe(200);
+    expect(calls).toEqual([new TextDecoder().decode(bytes)]);
+  });
+
+  it("reads a getter cap per request", async () => {
+    let cap = 10_000;
+    const { handler } = recordingHandler();
+    const guarded = withWebhookGuard(handler, {
+      secret: SECRET,
+      get maxBodyBytes() {
+        return cap;
+      },
+    });
+
+    expect((await guarded(makeRequest("a".repeat(100)))).status).toBe(200);
+    cap = 50;
+    expect((await guarded(makeRequest("a".repeat(100)))).status).toBe(413);
+  });
+
+  it("routes the refusal through onError when one is supplied", async () => {
+    const onError = vi.fn((error: { status: number; message: string }) =>
+      NextResponse.json({ custom: error.message }, { status: error.status }),
+    );
+    const { handler } = recordingHandler();
+
+    const res = await withWebhookGuard(handler, { secret: SECRET, maxBodyBytes: 8, onError })(
+      makeRequest("a".repeat(100)),
+    );
+
+    expect(res.status).toBe(413);
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ status: 413 }));
+  });
+});
+
+describe("verifyWebhookRequest — body size cap", () => {
+  it("reports an oversized body as 413", async () => {
+    const check = await verifyWebhookRequest(makeRequest("a".repeat(100)), SECRET, {
+      maxBodyBytes: 50,
+    });
+
+    expect(check.ok).toBe(false);
+    expect(check.error?.status).toBe(413);
+  });
+});
+
+describe("resolveMaxWebhookBodyBytes", () => {
+  it("uses a configured positive integer", () => {
+    expect(resolveMaxWebhookBodyBytes("2048")).toBe(2048);
+    expect(resolveMaxWebhookBodyBytes(" 4096 ")).toBe(4096);
+  });
+
+  it.each([undefined, "", "  ", "0", "-5", "1.5", "lots", "1e400"])(
+    "falls back to the default for %s",
+    (raw) => {
+      expect(resolveMaxWebhookBodyBytes(raw)).toBe(DEFAULT_MAX_WEBHOOK_BODY_BYTES);
+    },
+  );
+});
+
+describe("withWebhookGuard — timestamp binding", () => {
+  it("refuses a bare-body legacy signature by default", async () => {
+    const body = JSON.stringify({ event: "ping" });
+    const { handler } = recordingHandler();
+
+    const res = await withWebhookGuard(handler, { secret: SECRET })(
+      makeRequest(body, { signature: signPayload(body, SECRET) }),
+    );
+
+    expect(res.status).toBe(401);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("admits a bare-body legacy signature when the route opts in", async () => {
+    const body = JSON.stringify({ event: "ping" });
+    const { handler, calls } = recordingHandler();
+
+    const res = await withWebhookGuard(handler, {
+      secret: SECRET,
+      allowUnboundLegacySignatures: true,
+    })(makeRequest(body, { signature: signPayload(body, SECRET) }));
+
+    expect(res.status).toBe(200);
+    expect(calls).toEqual([body]);
+  });
+
+  it("reads the opt-in per request", async () => {
+    let allow = true;
+    const body = "{}";
+    const guarded = withWebhookGuard(recordingHandler().handler, {
+      secret: SECRET,
+      get allowUnboundLegacySignatures() {
+        return allow;
+      },
+    });
+
+    expect(
+      (await guarded(makeRequest(body, { signature: signPayload(body, SECRET) }))).status,
+    ).toBe(200);
+    allow = false;
+    expect(
+      (await guarded(makeRequest(body, { signature: signPayload(body, SECRET) }))).status,
+    ).toBe(401);
+  });
+
+  it("applies the same rule in verifyWebhookRequest", async () => {
+    const body = "{}";
+    const bare = () => makeRequest(body, { signature: signPayload(body, SECRET) });
+
+    expect((await verifyWebhookRequest(bare(), SECRET)).ok).toBe(false);
+    expect(
+      (await verifyWebhookRequest(bare(), SECRET, { allowUnboundLegacySignatures: true })).ok,
+    ).toBe(true);
   });
 });

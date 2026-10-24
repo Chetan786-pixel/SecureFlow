@@ -7,6 +7,9 @@
  *
  * Environment variables:
  *   GENERIC_WEBHOOK_SECRET - Shared HMAC secret for signature verification.
+ *   WEBHOOK_MAX_BYTES - Largest body accepted, in bytes (default 1 MiB).
+ *   WEBHOOK_ALLOW_UNBOUND_LEGACY_SIGNATURES - "true" to also accept a legacy
+ *     sha256= digest over the bare body. Off by default; see hmacSigner.ts.
  */
 
 import { withRateLimit } from "@/lib/middleware/rate-limit";

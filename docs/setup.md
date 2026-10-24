@@ -16,7 +16,7 @@ This guide walks you through acquiring every credential required to run SecureFl
 3. Set in `.env`:
    ```env
    DATABASE_URL="postgresql://postgres:<your_password>@localhost:5432/secureflow"
-   DATABASE_POOL_URL=""   # leave empty for local dev
+   DATABASE_POOL_URL="postgresql://postgres:<your_password>@localhost:5432/secureflow"   # same as DATABASE_URL for local dev
    DB_POOL_MAX=10
    ```
 
@@ -131,6 +131,11 @@ UPSTASH_REDIS_REST_TOKEN="your_token"
 ## 6. ArmorIQ (optional — `ARMORIQ_API_KEY`, `USER_ID`, `AGENT_ID`)
 
 These are only needed for advanced policy features. Leave blank for standard local development.
+
+If ArmorIQ becomes slow or unreachable, a circuit breaker opens after 3 consecutive upstream failures (timeouts, rate limits, 5xx, network errors) and ArmorIQ-gated actions are refused until it answers a probe. Both knobs are optional:
+
+- `ARMORIQ_CIRCUIT_FAILURE_THRESHOLD` — consecutive failures before the circuit opens (default `3`).
+- `ARMORIQ_CIRCUIT_RESET_TIMEOUT_MS` — milliseconds before a probe is allowed (default `30000`).
 
 ---
 

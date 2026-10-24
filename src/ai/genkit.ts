@@ -167,6 +167,58 @@ export function getSecurityExplanationModelChain(): Array<typeof gptOssx20b | st
   return [securityExplanationModel, ...securityExplanationFallbackModels];
 }
 
+// ── AI Timeout & Resilient Fallback Execution (#1299) ──────────────────────
+export const DEFAULT_AI_TIMEOUT_MS = 15_000;
+
+export interface AiTimeoutOptions<T> {
+  timeoutMs?: number;
+  fallback?: () => Promise<T> | T;
+  label?: string;
+}
+
+/**
+ * Executes an AI operation within an explicit timeout boundary.
+ * If the call exceeds the timeout deadline or experiences network stalls,
+ * triggers the provided fallback callback or throws APIConnectionTimeoutError.
+ */
+export async function withAiTimeout<T>(
+  operation: (signal: AbortSignal) => Promise<T>,
+  options: AiTimeoutOptions<T> = {},
+): Promise<T> {
+  const timeoutMs =
+    options.timeoutMs ?? (Number(process.env.AI_TIMEOUT_MS) || DEFAULT_AI_TIMEOUT_MS);
+  const controller = new AbortController();
+
+  let timer: NodeJS.Timeout | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      const err = new Error(
+        `AI operation timed out after ${timeoutMs}ms${options.label ? ` (${options.label})` : ""}`,
+      );
+      err.name = "APIConnectionTimeoutError";
+      reject(err);
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([operation(controller.signal), timeoutPromise]);
+  } catch (error: any) {
+    if (
+      options.fallback &&
+      (error?.name === "APIConnectionTimeoutError" ||
+        error?.message?.includes("timed out") ||
+        error?.status === 504 ||
+        error?.code === "ETIMEDOUT")
+    ) {
+      return await options.fallback();
+    }
+    throw error;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 // ── ArmorIQ Pre-Execution Intent Signing (#1275) ──────────────────────────
 export {
   declareAndSignIntent as signAgentIntent,

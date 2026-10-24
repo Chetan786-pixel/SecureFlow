@@ -18,7 +18,7 @@
 # ----------------------------------------------------------------------------
 # 1. deps — install node_modules (cached unless package*.json changes)
 # ----------------------------------------------------------------------------
-FROM node:22-alpine AS deps
+FROM node:22-alpine@sha256:d2166de198f26e17e5a442f537754dd616ab069c47cc57b889310a717e0abbf9 AS deps
 RUN apk update && apk upgrade --no-cache && apk add --no-cache libc6-compat
 WORKDIR /app
 
@@ -37,7 +37,7 @@ RUN --mount=type=cache,target=/root/.npm npm ci --legacy-peer-deps
 # ----------------------------------------------------------------------------
 # 2. builder — compile the Next.js app and emit the standalone bundle
 # ----------------------------------------------------------------------------
-FROM node:22-alpine AS builder
+FROM node:22-alpine@sha256:d2166de198f26e17e5a442f537754dd616ab069c47cc57b889310a717e0abbf9 AS builder
 RUN apk update && apk upgrade --no-cache && apk add --no-cache libc6-compat
 WORKDIR /app
 
@@ -75,18 +75,28 @@ RUN --mount=type=cache,target=/root/.npm npx prisma generate && npx next build
 # stays exactly what Next's output tracing produced, and so this layer
 # is cached independently of app source changes.
 # ----------------------------------------------------------------------------
-FROM node:22-alpine AS prisma-cli
+FROM node:22-alpine@sha256:d2166de198f26e17e5a442f537754dd616ab069c47cc57b889310a717e0abbf9 AS prisma-cli
 RUN apk update && apk upgrade --no-cache
 WORKDIR /opt/prisma-cli
 RUN --mount=type=cache,target=/root/.npm npm init -y \
  && npm install --omit=dev --ignore-scripts --no-audit --no-fund \
       dotenv@16.6.1 prisma@7.10.0
 
+# 4. migrator: one-shot job that applies DB migrations (not shipped in runner)
+FROM prisma-cli AS migrator
+WORKDIR /app
+ENV NODE_PATH=/opt/prisma-cli/node_modules
+COPY prisma ./prisma
+COPY prisma.config.ts ./prisma.config.ts
+RUN chown -R node:node /opt/prisma-cli /app
+USER node
+CMD ["node", "/opt/prisma-cli/node_modules/prisma/build/index.js", "migrate", "deploy"]
+
 
 # ----------------------------------------------------------------------------
 # 4. runner — minimal runtime image
 # ----------------------------------------------------------------------------
-FROM node:22-alpine AS runner
+FROM node:22-alpine@sha256:d2166de198f26e17e5a442f537754dd616ab069c47cc57b889310a717e0abbf9 AS runner
 RUN apk update && apk upgrade --no-cache
 WORKDIR /app
 
@@ -94,18 +104,12 @@ ENV NODE_ENV=production
 ENV PORT=9002
 ENV HOSTNAME=0.0.0.0
 ENV NEXT_TELEMETRY_DISABLED=1
-# Make the isolated prisma CLI resolvable from the runner's NODE_PATH so
-# the entrypoint can invoke `prisma migrate deploy` without colliding with
-# the standalone bundle's own (minimal) node_modules.
-ENV NODE_PATH=/opt/prisma-cli/node_modules
 
 # Dedicated non-root user. A compromised Next.js process should not have
 # root inside the container.
 RUN addgroup --system --gid 1001 nodejs \
  && adduser --system --uid 1001 nextjs
 
-# --- Prisma CLI layer (for startup migrations) -----------------------------
-COPY --from=prisma-cli --chown=nextjs:nodejs /opt/prisma-cli /opt/prisma-cli
 
 # --- Standalone Next.js server ---------------------------------------------
 # `.next/standalone` is a self-contained bundle produced by `output: 'standalone'`
@@ -121,9 +125,6 @@ RUN find ./.next/static -name "*.map" -type f -delete 2>/dev/null || true
 # Public folder is served as-is by Next.js — also not in standalone.
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
-# --- Prisma schema + migrations (for `migrate deploy` at startup) ----------
-COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
-COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts ./prisma.config.ts
 
 # --- Generated Prisma client runtime artifacts -----------------------------
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
