@@ -76,7 +76,10 @@ export function globToRegexSource(glob: string): string {
       out += "(?:.*/)?"; // any number of directories, including none
       i += 3;
     } else if (glob.startsWith("**", i)) {
-      out += ".*";
+      // `**` is only recursive as a whole path segment; `a**b` is one segment.
+      const segmentStart = i === 0 || glob[i - 1] === "/";
+      const segmentEnd = i + 2 === glob.length || glob[i + 2] === "/";
+      out += segmentStart && segmentEnd ? ".*" : "[^/]*";
       i += 2;
     } else if (glob[i] === "*") {
       out += "[^/]*";
