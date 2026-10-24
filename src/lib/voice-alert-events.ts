@@ -53,6 +53,14 @@ export function subscribeVoiceAlert(
   // `duplicate()` creates a new connection with the same config.
   const subscriber = redis.duplicate();
   const channel = alertChannel(userId);
+
+  // ioredis emits `error` on the subscriber connection for network failures and
+  // reconnects. EventEmitter throws when an `error` event has no listener, which
+  // would take down the process rather than leaving the stream to recover.
+  subscriber.on("error", (err: Error) => {
+    console.error(`[VoiceAlerts] Subscriber connection error on ${channel}:`, err);
+  });
+
   subscriber.subscribe(channel, (err: Error | null) => {
     if (err) {
       console.error(`[VoiceAlerts] Failed to subscribe to ${channel}:`, err);
