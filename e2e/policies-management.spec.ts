@@ -8,7 +8,7 @@ test.describe("Policies management", () => {
   test("renders the rules page with the compiled rule set", async ({ page }) => {
     await expect(page.getByRole("heading", { name: "The Rules" })).toBeVisible();
     await expect(page.getByText("Programmatic Rule Set")).toBeVisible();
-    await expect(page.locator("pre")).toBeVisible();
+    await expect(page.locator("pre").filter({ hasText: '"deny"' })).toBeVisible();
   });
 
   test("shows the ArmorIQ inactive notice when no API key is configured", async ({ page }) => {
