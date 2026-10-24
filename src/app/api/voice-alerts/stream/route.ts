@@ -18,6 +18,15 @@ import { subscribeVoiceAlert } from "@/lib/voice-alert-events";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Idle interval for SSE keepalive frames.
+ *
+ * Proxies and load balancers commonly close connections that are silent for
+ * 30-60 seconds. Voice alerts can be hours apart, so the stream needs a frame
+ * on a shorter interval than the shortest typical idle timeout.
+ */
+export const VOICE_ALERT_HEARTBEAT_MS = 15_000;
+
 export async function GET(request: NextRequest) {
   // 1. Authenticate
   const session = await auth();
@@ -40,36 +49,64 @@ export async function GET(request: NextRequest) {
   }
 
   // 3. Build the SSE stream.
+  let stopStream: ((closeController: boolean) => void) | null = null;
+
   const stream = new ReadableStream({
     start(controller) {
       const encoder = new TextEncoder();
+      let closed = false;
+      let heartbeat: ReturnType<typeof setInterval> | null = null;
+      let unsubscribe: () => void = () => {};
+
+      const cleanup = (closeController: boolean) => {
+        if (closed) return;
+        closed = true;
+        if (heartbeat) clearInterval(heartbeat);
+        unsubscribe();
+        if (closeController) {
+          try {
+            controller.close();
+          } catch {
+            // Already closed — safe to ignore.
+          }
+        }
+      };
 
       /** Send one SSE event frame. */
       const send = (data: string) => {
+        if (closed) return;
         try {
           controller.enqueue(encoder.encode(`data: ${data}\n\n`));
         } catch {
-          // Controller may already be closed if the client disconnected.
+          // The controller is gone; release the Redis subscription too.
+          cleanup(false);
         }
       };
+
+      stopStream = cleanup;
 
       // Send an initial heartbeat so the browser knows the connection is live.
       send(JSON.stringify({ type: "connected" }));
 
       // Subscribe to the user's Redis channel.
-      const unsubscribe = subscribeVoiceAlert(userId, (event) => {
+      unsubscribe = subscribeVoiceAlert(userId, (event) => {
         send(JSON.stringify({ type: "voice-alert", ...event }));
       });
 
+      // Keep idle connections alive through proxies that close silent streams.
+      heartbeat = setInterval(() => {
+        send(JSON.stringify({ type: "heartbeat", timestamp: Date.now() }));
+      }, VOICE_ALERT_HEARTBEAT_MS);
+
       // Clean up when the client disconnects (tab closed, navigation, etc.).
-      request.signal.addEventListener("abort", () => {
-        unsubscribe();
-        try {
-          controller.close();
-        } catch {
-          // Already closed — safe to ignore.
-        }
-      });
+      request.signal.addEventListener("abort", () => cleanup(true));
+      if (request.signal.aborted) {
+        cleanup(true);
+      }
+    },
+    cancel() {
+      // A consumer can cancel the body without aborting the request signal.
+      stopStream?.(false);
     },
   });
 
