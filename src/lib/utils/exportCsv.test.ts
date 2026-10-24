@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { downloadCSV, downloadJSON } from "./exportCsv";
+import { downloadCSV, downloadJSON, downloadCompliancePDF, buildCompliancePDF } from "./exportCsv";
 import { CSV_BOM, CSV_ROW_SEPARATOR } from "./csv";
 
 /**
@@ -148,6 +148,81 @@ describe("downloadCSV", () => {
     expect(() => downloadCSV(rows, "x.csv")).toThrow("popup blocked");
 
     // Both halves of the cleanup run: no leaked anchor, no leaked blob.
+    expect(currentLink()).toBeNull();
+    expect(revoked).toEqual(["blob:mock/1"]);
+  });
+});
+
+describe("compliance PDF evidence", () => {
+  const records = [
+    {
+      traceId: "trace-1",
+      action: "AUTO_REMEDIATION",
+      metadata: { note: "a (b) \\ c" },
+    },
+  ];
+
+  it("writes a complete PDF with a resolvable cross-reference table", () => {
+    const pdf = buildCompliancePDF("SOC 2 evidence", records, new Date("2026-09-20T10:00:00.000Z"));
+
+    expect(pdf.startsWith("%PDF-1.4\n")).toBe(true);
+    expect(pdf.endsWith("%%EOF\n")).toBe(true);
+
+    const startxref = pdf.match(/startxref\n(\d+)\n%%EOF\n$/);
+    expect(startxref).not.toBeNull();
+
+    const xrefOffset = Number(startxref?.[1]);
+    expect(pdf.slice(xrefOffset, xrefOffset + 4)).toBe("xref");
+
+    const xrefLines = pdf.slice(xrefOffset).split("\n");
+    const objectCount = Number(xrefLines[1].split(" ")[1]);
+    expect(objectCount).toBeGreaterThan(1);
+
+    // Every in-use entry must point at the object header it claims to describe.
+    for (let objectNumber = 1; objectNumber < objectCount; objectNumber++) {
+      const entry = xrefLines[2 + objectNumber];
+      const offset = Number(entry.slice(0, 10));
+      expect(pdf.slice(offset, offset + `${objectNumber} 0 obj`.length)).toBe(
+        `${objectNumber} 0 obj`,
+      );
+    }
+  });
+
+  it("escapes PDF string delimiters and replaces non-ASCII text", () => {
+    const pdf = buildCompliancePDF(
+      "Evidence (draft)",
+      [{ note: "a (b) \\ c", repo: "acme/caf\u00e9" }],
+      new Date("2026-09-20T10:00:00.000Z"),
+    );
+
+    expect(pdf).toContain("a \\(b\\) \\\\ c");
+    expect(pdf).toContain("acme/caf?");
+    expect(pdf).not.toContain("caf\u00e9");
+  });
+
+  it("adds pages instead of letting long evidence run off the first page", () => {
+    const manyRecords = Array.from({ length: 120 }, (_, index) => ({
+      traceId: `trace-${index}`,
+      detail: "x".repeat(120),
+    }));
+
+    const pdf = buildCompliancePDF(
+      "Large report",
+      manyRecords,
+      new Date("2026-09-20T10:00:00.000Z"),
+    );
+
+    const pageCount = Number(pdf.match(/\/Count (\d+)/)?.[1]);
+    expect(pageCount).toBeGreaterThan(1);
+    expect(pdf.match(/\/Type \/Page /g)).toHaveLength(pageCount);
+  });
+
+  it("downloads the same document with the PDF content type and cleans up", async () => {
+    downloadCompliancePDF("SOC 2 evidence", records, "evidence.pdf");
+
+    expect(blobs).toHaveLength(1);
+    expect(blobs[0].type).toBe("application/pdf");
+    expect(await readBlob(blobs[0])).toContain("%PDF-1.4");
     expect(currentLink()).toBeNull();
     expect(revoked).toEqual(["blob:mock/1"]);
   });
