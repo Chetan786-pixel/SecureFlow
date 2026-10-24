@@ -50,9 +50,16 @@ describe("outboundWorker 'failed' listener", () => {
     dlqAdd.mockResolvedValue(undefined);
   });
 
-  it("registers completed and failed listeners", () => {
+  it("registers completed, failed, and error listeners", () => {
     expect(handlers.has("completed")).toBe(true);
     expect(handlers.has("failed")).toBe(true);
+    expect(handlers.has("error")).toBe(true);
+  });
+
+  it("does not throw when the worker emits a connection error", () => {
+    const onError = handlers.get("error")!;
+
+    expect(() => onError(new Error("Redis connection lost"))).not.toThrow();
   });
 
   it("does nothing for a job that still has attempts left", async () => {

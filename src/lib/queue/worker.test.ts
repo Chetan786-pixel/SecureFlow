@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const handlers = vi.hoisted(() => ({
   completed: null as ((...args: any[]) => any) | null,
   failed: null as ((...args: any[]) => any) | null,
+  error: null as ((...args: any[]) => any) | null,
 }));
 
 // Trap the handlers in our hoisted object so they survive Vitest clearing mocks
@@ -11,6 +12,7 @@ const mockWorkerOn = vi.hoisted(() =>
   vi.fn((event: string, handler: (...args: any[]) => any) => {
     if (event === "completed") handlers.completed = handler;
     if (event === "failed") handlers.failed = handler;
+    if (event === "error") handlers.error = handler;
   }),
 );
 
@@ -72,9 +74,19 @@ describe("Webhook Worker DLQ Routing", () => {
     mockDLQAdd.mockClear();
   });
 
-  it("registers completed and failed listeners on the worker", () => {
+  it("registers completed, failed, and error listeners on the worker", () => {
     expect(handlers.completed).toBeTypeOf("function");
     expect(handlers.failed).toBeTypeOf("function");
+    expect(handlers.error).toBeTypeOf("function");
+  });
+
+  it("logs worker connection errors without throwing", () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const error = new Error("Redis connection lost");
+
+    expect(() => handlers.error!(error)).not.toThrow();
+    expect(errorSpy).toHaveBeenCalledWith("[QUEUE] Worker connection error:", error);
+    errorSpy.mockRestore();
   });
 
   it("routes to DLQ when job fails permanently (attempts exhausted)", async () => {
