@@ -15,10 +15,10 @@ beforeEach(() => {
 });
 
 function request(query = ""): NextRequest {
-  return new NextRequest(`http://localhost:3000/api/bulk-remediation/progress${query}`);
+  return new NextRequest(`http://localhost:3000/api/findings/bulk-remediate/progress${query}`);
 }
 
-describe("GET /api/bulk-remediation/progress", () => {
+describe("GET /api/findings/bulk-remediate/progress", () => {
   it("rejects unauthenticated callers before opening a stream", async () => {
     authMock.mockResolvedValueOnce(null);
 

@@ -103,6 +103,7 @@ describe("GET /api/audit/armoriq", () => {
 
     expect(res.status).toBe(200);
     expect(fetchTracesMock).toHaveBeenCalledWith({
+      userId: "user-123",
       scanJobId: undefined,
       findingId: undefined,
       decision: "BLOCK",
