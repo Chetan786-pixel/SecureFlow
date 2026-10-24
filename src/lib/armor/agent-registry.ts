@@ -162,9 +162,13 @@ class ArmorIQAgentRegistry {
         if (pattern === "*") return true;
         if (pattern.endsWith("/**")) {
           const prefix = pattern.slice(0, -3);
-          return targetScope.startsWith(prefix);
+          // `src/**` covers `src/` and everything below it, but not a sibling
+          // such as `src-evil/`. A bare startsWith(prefix) accepted that.
+          return targetScope === prefix || targetScope.startsWith(`${prefix}/`);
         }
-        return targetScope.startsWith(pattern) || targetScope === pattern;
+        // A non-wildcard scope is an exact capability name. Prefix matching let
+        // `read:findings` approve `read:findings-evil`.
+        return targetScope === pattern;
       });
 
       if (!scopeAllowed) {

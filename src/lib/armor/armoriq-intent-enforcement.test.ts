@@ -54,6 +54,44 @@ describe("ArmorIQ Agent Registry & Policy Definitions (#1275)", () => {
     expect(check.rule).toBe("allow:whitelisted_tool");
   });
 
+  it("does not treat a lookalike directory as inside a path scope", () => {
+    const check = agentRegistry.validateToolCall(
+      ARMORIQ_AGENT_IDS.REMEDIATION_PATCH_GENERATOR,
+      "generateUnifiedDiff",
+      "src-evil/payload.ts",
+    );
+
+    expect(check.allowed).toBe(false);
+    expect(check.rule).toBe("deny:out_of_scope_access");
+  });
+
+  it("does not treat a lookalike capability as an exact scope", () => {
+    const check = agentRegistry.validateToolCall(
+      ARMORIQ_AGENT_IDS.SECURITY_EXPLANATION_STREAMER,
+      "generateExplanation",
+      "read:findings-evil",
+    );
+
+    expect(check.allowed).toBe(false);
+    expect(check.rule).toBe("deny:out_of_scope_access");
+  });
+
+  it("still permits nested paths and exact capability names", () => {
+    const nested = agentRegistry.validateToolCall(
+      ARMORIQ_AGENT_IDS.REMEDIATION_PATCH_GENERATOR,
+      "generateUnifiedDiff",
+      "src/auth/session.ts",
+    );
+    const capability = agentRegistry.validateToolCall(
+      ARMORIQ_AGENT_IDS.SECURITY_EXPLANATION_STREAMER,
+      "readFinding",
+      "read:findings",
+    );
+
+    expect(nested.allowed).toBe(true);
+    expect(capability.allowed).toBe(true);
+  });
+
   it("strictly denies prohibited shell execution and direct push", () => {
     const shellCheck = agentRegistry.validateToolCall(
       ARMORIQ_AGENT_IDS.REMEDIATION_PATCH_GENERATOR,
