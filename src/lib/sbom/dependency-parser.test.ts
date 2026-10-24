@@ -164,6 +164,72 @@ describe("parseManifestFile — requirements.txt", () => {
       { name: "flask", version: "unknown", manifestFile: "requirements.txt", ecosystem: "pypi" },
     ]);
   });
+
+  it("keeps dotted names and strips extras before reading the version", () => {
+    const content = [
+      "zope.interface==6.1.0",
+      "requests[socks]==2.31.0",
+      "typing_extensions >= 4.12.2",
+    ].join("\n");
+
+    expect(parseManifestFile(content, "requirements.txt")).toEqual([
+      {
+        name: "zope.interface",
+        version: "6.1.0",
+        manifestFile: "requirements.txt",
+        ecosystem: "pypi",
+      },
+      { name: "requests", version: "2.31.0", manifestFile: "requirements.txt", ecosystem: "pypi" },
+      {
+        name: "typing_extensions",
+        version: "4.12.2",
+        manifestFile: "requirements.txt",
+        ecosystem: "pypi",
+      },
+    ]);
+  });
+
+  it("does not query versions the requirement excludes", () => {
+    const content = ["django!=3.2.0", "urllib3<2", "urllib3<=2.2.1", "flask~=3.0.0"].join("\n");
+
+    expect(parseManifestFile(content, "requirements.txt").map((dep) => dep.version)).toEqual([
+      "unknown",
+      "unknown",
+      "2.2.1",
+      "3.0.0",
+    ]);
+  });
+
+  it("ignores environment markers and inline comments", () => {
+    const content = [
+      'requests==2.31.0 ; python_version >= "3.8"',
+      "django==4.2.7  # pinned for the LTS window",
+    ].join("\n");
+
+    expect(parseManifestFile(content, "requirements.txt").map((dep) => dep.version)).toEqual([
+      "2.31.0",
+      "4.2.7",
+    ]);
+  });
+
+  it("skips option lines and bare source URLs", () => {
+    const content = [
+      "-r requirements/base.txt",
+      "--index-url https://example.com/simple",
+      "https://example.com/archive/pkg.tar.gz",
+      "git+https://github.com/pypa/pip.git",
+      "pip @ git+https://github.com/pypa/pip.git",
+    ].join("\n");
+
+    expect(parseManifestFile(content, "requirements.txt")).toEqual([
+      { name: "pip", version: "unknown", manifestFile: "requirements.txt", ecosystem: "pypi" },
+    ]);
+  });
+
+  it("reports wildcard pins as unknown rather than inventing a release", () => {
+    expect(parseManifestFile("requests==2.31.*", "requirements.txt")[0].version).toBe("unknown");
+    expect(parseManifestFile("requests==2.31.x", "requirements.txt")[0].version).toBe("unknown");
+  });
 });
 
 describe("parseManifestFile — CycloneDX SBOM", () => {

@@ -1139,6 +1139,9 @@ export const worker = new Worker<WebhookJobData>(
 );
 
 worker.on("completed", (job: Job) => console.log(`[QUEUE] Job ${job.id} completed.`));
+worker.on("error", (err: Error) => {
+  console.error("[QUEUE] Worker connection error:", err);
+});
 worker.on("failed", async (job: Job | undefined, err: Error) => {
   if (!job) return;
   const maxAttempts = job.opts.attempts || 3;

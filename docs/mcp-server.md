@@ -80,9 +80,9 @@ All MCP tool invocations are gated by the `verifyDeclaredIntent` boundary filter
 
 ## Environment Variables
 
-| Variable                    | Default                              | Purpose                                                                  |
-| :-------------------------- | :----------------------------------- | :----------------------------------------------------------------------- |
-| `ARMORIQ_PROOF_SIGNING_KEY` | `armoriq-boundary-provenance-key-v1` | Secret key used to sign execution proofs and verify intent authenticity. |
+| Variable                    | Default         | Purpose                                                                  |
+| :-------------------------- | :-------------- | :----------------------------------------------------------------------- |
+| `ARMORIQ_PROOF_SIGNING_KEY` | none (required) | Secret key used to sign execution proofs and verify intent authenticity. |
 
 ---
 

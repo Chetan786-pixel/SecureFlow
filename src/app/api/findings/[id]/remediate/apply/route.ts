@@ -6,6 +6,7 @@ import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 import { getGitHubAppCredentials } from "@/lib/github/app-auth";
 import { ArmorIQService } from "@/lib/armor/iq";
+import { ArmorIQUnavailableError, withArmorIQBreaker } from "@/lib/armor/armoriq-breaker";
 import { AUTO_REMEDIATION_ARMORIQ_SCOPE } from "@/lib/armor/auto-remediation";
 import { applyScopedUnifiedDiff, isAllowedAutoRemediationPath } from "@/lib/armor/auto-remediation";
 
@@ -185,8 +186,17 @@ async function handler(request: NextRequest, { params }: { params: Promise<{ id:
         },
       );
 
-      const token = await armorClient.getIntentToken(capture, policy, 300);
+      const token = await withArmorIQBreaker(() =>
+        armorClient.getIntentToken(capture, policy, 300),
+      );
       const verification = await ArmorIQService.verifyIntentToken(token);
+
+      if (verification.unavailable) {
+        return NextResponse.json(
+          { error: "ArmorIQ is temporarily unavailable; remediation is blocked" },
+          { status: 503 },
+        );
+      }
 
       const signedPlan = token.rawToken?.plan;
       const samePlan = JSON.stringify(signedPlan) === JSON.stringify(expectedPlan);
@@ -208,6 +218,12 @@ async function handler(request: NextRequest, { params }: { params: Promise<{ id:
       }
     } catch (error) {
       console.error("[AUTO_REMEDIATION] ArmorIQ authorization failed:", error);
+      if (error instanceof ArmorIQUnavailableError) {
+        return NextResponse.json(
+          { error: "ArmorIQ is temporarily unavailable; remediation is blocked" },
+          { status: 503 },
+        );
+      }
       return NextResponse.json(
         { error: "ArmorIQ authorization failed; remediation is blocked" },
         { status: 403 },

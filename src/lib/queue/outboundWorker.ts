@@ -83,6 +83,10 @@ outboundWorker.on("completed", (job: Job) => {
   log.debug("Outbound job completed", { jobId: job.id });
 });
 
+outboundWorker.on("error", (err: Error) => {
+  log.error("Outbound worker connection error", { error: err.message });
+});
+
 outboundWorker.on("failed", async (job: Job | undefined, err: Error) => {
   if (!job) return;
 

@@ -1,30 +1,29 @@
 /* eslint-disable react-hooks/rules-of-hooks */
 import { test as base, expect } from "@playwright/test";
+import type { Page } from "@playwright/test";
 
 /**
- * Shared Playwright fixture that logs in once and reuses the resulting
- * session cookie for every test in this file's project, instead of
- * clicking through the GitHub OAuth screen per test.
- *
- * VERIFY: NextAuth v5's session cookie name/value shape depends on your
- * `AUTH_SECRET` / provider config. The simplest reliable setup is a
- * dedicated test-only credentials/dev provider (or a seeded session
- * row) exposed only when `NODE_ENV=test`. Swap the `login()` body below
- * for whatever your app's test-auth strategy actually is -- everything
- * else in this suite only depends on the page being authenticated
- * afterward.
+ * Mock-auth test seam (see src/lib/mock-auth.ts). The app honours a
+ * `mock-session` cookie when NEXT_PUBLIC_MOCK_AUTH and ALLOW_MOCK_AUTH are
+ * both "true" (set by playwright.config.ts and CI), so tests can act as any
+ * role without a real GitHub OAuth round trip.
  */
+export type MockRole = "admin" | "user" | "none" | "no-codename" | "recruit";
+
+const DEFAULT_BASE_URL = "http://localhost:9002";
+
+export async function setMockSession(page: Page, role: MockRole, baseURL?: string) {
+  await page
+    .context()
+    .addCookies([{ name: "mock-session", value: role, url: baseURL ?? DEFAULT_BASE_URL }]);
+}
+
+/** Default fixture: every test starts signed in as an admin. */
 export const test = base.extend({
   page: async ({ page, baseURL }, use) => {
-    await login(page, baseURL ?? "http://localhost:9002");
+    await setMockSession(page, "admin", baseURL);
     await use(page);
   },
 });
-
-async function login(page: import("@playwright/test").Page, baseURL: string) {
-  await page.goto(`${baseURL}/login`);
-  await page.getByTestId("github-sign-in-button").click();
-  await page.waitForURL(/\/dashboard/, { timeout: 15_000 });
-}
 
 export { expect };

@@ -1,17 +1,56 @@
-﻿import { NextRequest } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
+import { MAX_PAGE_SIZE } from "@/lib/findings/query";
 
 export const dynamic = "force-dynamic";
 
+const DEFAULT_TOTAL = MAX_PAGE_SIZE;
+
 export async function GET(req: NextRequest) {
-  const encoder = new TextEncoder();
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const searchParams = req.nextUrl.searchParams;
-  const totalFindings = parseInt(searchParams.get("total") || "100", 10);
+  const rawTotal = searchParams.get("total");
+
+  let totalFindings = DEFAULT_TOTAL;
+  if (rawTotal !== null) {
+    // Accept a plain positive integer only. `parseInt` also accepts "12abc",
+    // and Number() accepts an empty string as zero; neither is a count.
+    if (!/^[1-9]\d*$/.test(rawTotal) || Number(rawTotal) > MAX_PAGE_SIZE) {
+      return NextResponse.json(
+        {
+          error: "Invalid total",
+          message: `total must be an integer between 1 and ${MAX_PAGE_SIZE}`,
+        },
+        { status: 400 },
+      );
+    }
+    totalFindings = Number(rawTotal);
+  }
+
+  const encoder = new TextEncoder();
+  let cancelled = false;
 
   const stream = new ReadableStream({
     async start(controller) {
+      const send = (payload: string): boolean => {
+        if (cancelled) return false;
+        try {
+          controller.enqueue(encoder.encode(`data: ${payload}\n\n`));
+          return true;
+        } catch {
+          cancelled = true;
+          return false;
+        }
+      };
+
       try {
         for (let i = 1; i <= totalFindings; i++) {
-          // Simulate batch remediation progress chunk
+          if (cancelled) break;
+
           const progress = Math.round((i / totalFindings) * 100);
           const data = JSON.stringify({
             processed: i,
@@ -21,17 +60,26 @@ export async function GET(req: NextRequest) {
             message: `Remediating finding ${i} of ${totalFindings}...`,
           });
 
-          controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+          if (!send(data)) break;
 
           // Small artificial delay for smooth real-time streaming effect
           await new Promise((resolve) => setTimeout(resolve, 50));
         }
-      } catch (error) {
-        const errData = JSON.stringify({ status: "error", message: "Stream interrupted" });
-        controller.enqueue(encoder.encode(`data: ${errData}\n\n`));
+      } catch {
+        send(JSON.stringify({ status: "error", message: "Stream interrupted" }));
       } finally {
-        controller.close();
+        if (!cancelled) {
+          cancelled = true;
+          try {
+            controller.close();
+          } catch {
+            // The client may have disconnected between the last send and close.
+          }
+        }
       }
+    },
+    cancel() {
+      cancelled = true;
     },
   });
 

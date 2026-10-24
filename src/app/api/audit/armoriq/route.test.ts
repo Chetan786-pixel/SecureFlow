@@ -5,12 +5,14 @@ import {
   ArmorIQUnreachableError,
 } from "../../../../../__mocks__/@armoriq/sdk";
 
-const { authMock, fetchTracesMock, recordAuditLogMock, buildReportMock } = vi.hoisted(() => ({
-  authMock: vi.fn(),
-  fetchTracesMock: vi.fn(),
-  recordAuditLogMock: vi.fn(),
-  buildReportMock: vi.fn(),
-}));
+const { authMock, fetchTracesMock, recordAuditLogMock, buildReportMock, verifyOwnershipMock } =
+  vi.hoisted(() => ({
+    authMock: vi.fn(),
+    fetchTracesMock: vi.fn(),
+    recordAuditLogMock: vi.fn(),
+    buildReportMock: vi.fn(),
+    verifyOwnershipMock: vi.fn(),
+  }));
 
 vi.mock("@/auth", () => ({ auth: authMock }));
 
@@ -18,6 +20,7 @@ vi.mock("@/lib/armor/audit-integration", () => ({
   fetchArmorIQAuditTraces: fetchTracesMock,
   recordArmorIQAuditLog: recordAuditLogMock,
   buildComplianceReport: buildReportMock,
+  verifyArmorIQAuditResourceOwnership: verifyOwnershipMock,
 }));
 
 vi.mock("@/lib/middleware/rate-limit", () => ({
@@ -80,6 +83,7 @@ describe("GET /api/audit/armoriq", () => {
     const body = await res.json();
     expect(body).toEqual({ traces: mockTraces, total: 1 });
     expect(fetchTracesMock).toHaveBeenCalledWith({
+      userId: "user-123",
       scanJobId: "job-1",
       findingId: undefined,
       decision: "ALLOW",
@@ -136,6 +140,7 @@ describe("GET /api/audit/armoriq", () => {
 describe("POST /api/audit/armoriq", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    verifyOwnershipMock.mockResolvedValue(true);
   });
 
   it("returns 401 Unauthorized when session is missing", async () => {
@@ -193,6 +198,32 @@ describe("POST /api/audit/armoriq", () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toContain("('ALLOW' | 'BLOCK' | 'HOLD')");
+    expect(recordAuditLogMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 and writes nothing when the scan job or finding belongs to another user", async () => {
+    authMock.mockResolvedValueOnce({ user: { id: "user-123" } });
+    verifyOwnershipMock.mockResolvedValueOnce(false);
+
+    const req = new NextRequest("http://localhost:3000/api/audit/armoriq", {
+      method: "POST",
+      body: JSON.stringify({
+        scanJobId: "job-owned-by-someone-else",
+        findingId: "finding-owned-by-someone-else",
+        agentId: "agent-1",
+        toolName: "bash",
+        decision: "ALLOW",
+      }),
+    });
+    const res = await POST(req);
+
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: "Scan job or finding not found" });
+    expect(verifyOwnershipMock).toHaveBeenCalledWith({
+      userId: "user-123",
+      scanJobId: "job-owned-by-someone-else",
+      findingId: "finding-owned-by-someone-else",
+    });
     expect(recordAuditLogMock).not.toHaveBeenCalled();
   });
 

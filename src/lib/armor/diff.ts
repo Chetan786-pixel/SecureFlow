@@ -51,8 +51,13 @@ export interface ParsedPatch {
 /**
  * `@@ -old,count +new,count @@` — the counts are optional, because git omits
  * them for a single-line range (`@@ -1 +7 @@`).
+ *
+ * The new-side count is captured because it is the only reliable way to know
+ * where one file's hunk ends and the next file begins. Without it, `inHunk`
+ * stayed true across a multi-file patch and the next `+++ b/file` header was
+ * parsed as an added source line.
  */
-const HUNK_HEADER = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
+const HUNK_HEADER = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/;
 
 /**
  * A real `---` / `+++` file header: the marker followed by whitespace or the
@@ -85,15 +90,27 @@ export function parseUnifiedPatch(patch: string): ParsedPatch {
   let newLine = 0;
   let inHunk = false;
   let hunkCount = 0;
+  /** New-side lines still expected in the current hunk. */
+  let newLinesRemaining = 0;
 
   // A trailing newline would otherwise yield a spurious empty final entry.
   const body = patch.endsWith("\n") ? patch.slice(0, -1) : patch;
+
+  const pushLine = (content: string, kind: DiffLineKind) => {
+    lines.push({ number: newLine, content, kind });
+    newLine += 1;
+    if (newLinesRemaining > 0) {
+      newLinesRemaining -= 1;
+      if (newLinesRemaining === 0) inHunk = false;
+    }
+  };
 
   for (const raw of body.split("\n")) {
     const hunk = raw.match(HUNK_HEADER);
     if (hunk) {
       newLine = parseInt(hunk[1], 10);
-      inHunk = true;
+      newLinesRemaining = hunk[2] === undefined ? 1 : parseInt(hunk[2], 10);
+      inHunk = newLinesRemaining > 0;
       hunkCount += 1;
       continue;
     }
@@ -107,8 +124,7 @@ export function parseUnifiedPatch(patch: string): ParsedPatch {
     if (raw.startsWith("\\")) continue;
 
     if (raw.startsWith("+")) {
-      lines.push({ number: newLine, content: raw.slice(1), kind: "added" });
-      newLine += 1;
+      pushLine(raw.slice(1), "added");
       continue;
     }
 
@@ -118,8 +134,7 @@ export function parseUnifiedPatch(patch: string): ParsedPatch {
     }
 
     if (raw.startsWith(" ")) {
-      lines.push({ number: newLine, content: raw.slice(1), kind: "context" });
-      newLine += 1;
+      pushLine(raw.slice(1), "context");
       continue;
     }
 
@@ -128,8 +143,7 @@ export function parseUnifiedPatch(patch: string): ParsedPatch {
       // trailing-whitespace normaliser between git and us produces these.
       // Treating it as "not a line" desynchronises everything after it, which
       // is precisely the drift this module exists to remove.
-      lines.push({ number: newLine, content: "", kind: "context" });
-      newLine += 1;
+      pushLine("", "context");
     }
 
     // Anything else inside a hunk is unrecognised. It is deliberately dropped

@@ -794,6 +794,34 @@ export async function armorIQRuntimeGatekeeper(params: {
   const action = toolCall.action;
   const targetPath =
     toolCall.targetPath || String(toolCall.params?.path || toolCall.params?.filePath || "");
+  const policy = agentRegistry.get(agentId);
+
+  // 0. An agent whose policy requires cryptographic intent must present one.
+  // This check was missing: the function only verified an intent when the caller
+  // happened to supply it, so omitting the field skipped intent enforcement
+  // entirely and fell through to the organizational whitelist.
+  if (policy?.requireCryptographicIntent && !signedIntent) {
+    const reason = `Agent '${agentId}' requires a cryptographically signed intent, but none was provided.`;
+    await recordArmorIQAuditLog({
+      userId,
+      agentId,
+      action,
+      decision: "BLOCK",
+      resource: targetPath || action,
+      reason,
+      rule: "deny:missing_signed_intent",
+      proofHash: "proof_unsigned",
+      signature: "sig_missing_intent",
+    });
+
+    return {
+      allowed: false,
+      status: "denied",
+      reason,
+      verified: false,
+      rule: "deny:missing_signed_intent",
+    };
+  }
 
   // 1. If signed intent is provided, verify cryptographic authenticity
   if (signedIntent) {
@@ -826,6 +854,34 @@ export async function armorIQRuntimeGatekeeper(params: {
         reason,
         verified: false,
         rule: "deny:tampered_intent",
+      };
+    }
+
+    // A valid signature proves the plan came from ArmorIQ, not that it was
+    // issued for this agent. Without this binding, an intent for one worker can
+    // authorize the same tool under another worker's policy.
+    if (signedIntent.agentId !== agentId) {
+      const reason = `Signed intent '${signedIntent.intentId}' was issued for agent '${signedIntent.agentId}', not '${agentId}'.`;
+      await recordArmorIQAuditLog({
+        userId,
+        agentId,
+        action,
+        decision: "BLOCK",
+        resource: targetPath || action,
+        reason,
+        rule: "deny:agent_intent_mismatch",
+        proofHash: signedIntent.intentHash,
+        signature: signedIntent.signature,
+        intentId: signedIntent.intentId,
+        complianceFrameworks: signedIntent.complianceMetadata?.frameworks,
+      });
+
+      return {
+        allowed: false,
+        status: "denied",
+        reason,
+        verified: true,
+        rule: "deny:agent_intent_mismatch",
       };
     }
 

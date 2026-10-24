@@ -55,6 +55,44 @@ describe("ArmorIQ Agent Registry & Policy Definitions (#1275)", () => {
     expect(check.rule).toBe("allow:whitelisted_tool");
   });
 
+  it("does not treat a lookalike directory as inside a path scope", () => {
+    const check = agentRegistry.validateToolCall(
+      ARMORIQ_AGENT_IDS.REMEDIATION_PATCH_GENERATOR,
+      "generateUnifiedDiff",
+      "src-evil/payload.ts",
+    );
+
+    expect(check.allowed).toBe(false);
+    expect(check.rule).toBe("deny:out_of_scope_access");
+  });
+
+  it("does not treat a lookalike capability as an exact scope", () => {
+    const check = agentRegistry.validateToolCall(
+      ARMORIQ_AGENT_IDS.SECURITY_EXPLANATION_STREAMER,
+      "generateExplanation",
+      "read:findings-evil",
+    );
+
+    expect(check.allowed).toBe(false);
+    expect(check.rule).toBe("deny:out_of_scope_access");
+  });
+
+  it("still permits nested paths and exact capability names", () => {
+    const nested = agentRegistry.validateToolCall(
+      ARMORIQ_AGENT_IDS.REMEDIATION_PATCH_GENERATOR,
+      "generateUnifiedDiff",
+      "src/auth/session.ts",
+    );
+    const capability = agentRegistry.validateToolCall(
+      ARMORIQ_AGENT_IDS.SECURITY_EXPLANATION_STREAMER,
+      "readFinding",
+      "read:findings",
+    );
+
+    expect(nested.allowed).toBe(true);
+    expect(capability.allowed).toBe(true);
+  });
+
   it("strictly denies prohibited shell execution and direct push", () => {
     const shellCheck = agentRegistry.validateToolCall(
       ARMORIQ_AGENT_IDS.REMEDIATION_PATCH_GENERATOR,
@@ -231,6 +269,46 @@ describe("ArmorIQ Runtime Gatekeeper Enforcement (#1275)", () => {
     expect(result.status).toBe("allowed");
     expect(result.proofHash).toBe(signedIntent.intentHash);
     expect(result.signature).toBe(signedIntent.signature);
+  });
+
+  it("denies an action when the policy requires an intent and none was supplied", async () => {
+    const result = await armorIQRuntimeGatekeeper({
+      agentId: ARMORIQ_AGENT_IDS.REMEDIATION_PATCH_GENERATOR,
+      toolCall: {
+        action: "generateUnifiedDiff",
+        targetPath: "src/api/handler.ts",
+      },
+    });
+
+    expect(result.allowed).toBe(false);
+    expect(result.status).toBe("denied");
+    expect(result.rule).toBe("deny:missing_signed_intent");
+    expect(result.verified).toBe(false);
+  });
+
+  it("denies a valid intent that was issued for a different agent", async () => {
+    const plan: ExecutionPlan = {
+      goal: "Explain an XSS finding",
+      proposedTools: ["generateExplanation"],
+    };
+    const signedIntent = declareAndSignIntent(
+      ARMORIQ_AGENT_IDS.SECURITY_EXPLANATION_STREAMER,
+      plan,
+    );
+
+    const result = await armorIQRuntimeGatekeeper({
+      agentId: ARMORIQ_AGENT_IDS.REMEDIATION_PATCH_GENERATOR,
+      signedIntent,
+      toolCall: {
+        action: "generateUnifiedDiff",
+        targetPath: "src/api/handler.ts",
+      },
+    });
+
+    expect(result.allowed).toBe(false);
+    expect(result.status).toBe("denied");
+    expect(result.rule).toBe("deny:agent_intent_mismatch");
+    expect(result.verified).toBe(true);
   });
 
   it("blocks deviations from the signed execution plan", async () => {

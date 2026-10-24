@@ -30,8 +30,22 @@ export interface SignedIntent {
   };
 }
 
-const DEFAULT_SIGNING_KEY =
-  process.env.ARMORIQ_PROOF_SIGNING_KEY || "armoriq-intent-provenance-key-v1";
+/**
+ * Resolve the HMAC key used for intent provenance.
+ *
+ * A built-in fallback key is public knowledge, so a deployment that forgot to
+ * set the environment variable would accept signatures forged by anyone who has
+ * read this repository. There is no safe default: signing fails loudly instead.
+ */
+function resolveSigningKey(explicitKey?: string): string {
+  const key = explicitKey?.trim() || process.env.ARMORIQ_PROOF_SIGNING_KEY?.trim();
+  if (!key) {
+    throw new Error(
+      "ARMORIQ_PROOF_SIGNING_KEY is not configured; refusing to sign or verify ArmorIQ intents with a public fallback key.",
+    );
+  }
+  return key;
+}
 
 /** True for a non-empty string after trimming. */
 function isNonEmptyString(value: unknown): value is string {
@@ -91,11 +105,8 @@ export function computeIntentHash(
 /**
  * Creates an HMAC-SHA256 signature for the intent hash.
  */
-export function signIntentHash(
-  intentHash: string,
-  signingKey: string = DEFAULT_SIGNING_KEY,
-): string {
-  return createHmac("sha256", signingKey).update(intentHash).digest("hex");
+export function signIntentHash(intentHash: string, signingKey?: string): string {
+  return createHmac("sha256", resolveSigningKey(signingKey)).update(intentHash).digest("hex");
 }
 
 /**
@@ -104,14 +115,15 @@ export function signIntentHash(
 export function declareAndSignIntent(
   agentId: string,
   plan: ExecutionPlan,
-  signingKey: string = DEFAULT_SIGNING_KEY,
+  signingKey?: string,
 ): SignedIntent {
   const policy = agentRegistry.get(agentId);
   const intentId = `intent_${randomUUID()}`;
   const timestamp = Date.now();
+  const resolvedKey = resolveSigningKey(signingKey);
 
   const intentHash = computeIntentHash(intentId, agentId, plan, timestamp);
-  const signature = signIntentHash(intentHash, signingKey);
+  const signature = signIntentHash(intentHash, resolvedKey);
 
   // Mint a mock/standard JWT-style intent token for downstream gateway compatibility
   const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
@@ -147,7 +159,7 @@ export function declareAndSignIntent(
  */
 export function verifySignedIntent(
   signedIntent: SignedIntent,
-  signingKey: string = DEFAULT_SIGNING_KEY,
+  signingKey?: string,
 ): { valid: boolean; reason?: string } {
   if (!isRecord(signedIntent)) {
     return { valid: false, reason: "Missing or malformed signed intent structure." };
@@ -165,6 +177,16 @@ export function verifySignedIntent(
     return {
       valid: false,
       reason: "Missing or malformed signed intent structure or execution plan.",
+    };
+  }
+
+  let resolvedKey: string;
+  try {
+    resolvedKey = resolveSigningKey(signingKey);
+  } catch (error) {
+    return {
+      valid: false,
+      reason: error instanceof Error ? error.message : "ArmorIQ signing key is not configured.",
     };
   }
 
@@ -187,7 +209,7 @@ export function verifySignedIntent(
     };
   }
 
-  const expectedSig = signIntentHash(expectedHash, signingKey);
+  const expectedSig = signIntentHash(expectedHash, resolvedKey);
   if (expectedSig !== signedIntent.signature) {
     return {
       valid: false,

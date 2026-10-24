@@ -23,7 +23,7 @@ vi.mock("@/lib/voice-alert-events", () => ({
   subscribeVoiceAlert: subscribeVoiceAlertMock,
 }));
 
-import { GET } from "./route";
+import { GET, VOICE_ALERT_HEARTBEAT_MS } from "./route";
 
 describe("GET /api/voice-alerts/stream", () => {
   beforeEach(() => {
@@ -164,6 +164,65 @@ describe("GET /api/voice-alerts/stream", () => {
       abortController.abort();
 
       expect(unsubscribeMock).toHaveBeenCalled();
+    });
+
+    it("sends a heartbeat on an idle stream and stops after abort", async () => {
+      vi.useFakeTimers();
+      try {
+        authMock.mockResolvedValueOnce({ user: { id: "user-active" } });
+        findUniqueMock.mockResolvedValueOnce({ voiceAlertsEnabled: true });
+        const unsubscribeMock = vi.fn();
+        subscribeVoiceAlertMock.mockReturnValueOnce(unsubscribeMock);
+
+        const abortController = new AbortController();
+        const req = new NextRequest("http://localhost:3000/api/voice-alerts/stream", {
+          signal: abortController.signal,
+        });
+        const res = await GET(req);
+        const reader = res.body!.getReader();
+        const decoder = new TextDecoder();
+
+        const connected = await reader.read();
+        expect(decoder.decode(connected.value)).toBe('data: {"type":"connected"}\n\n');
+
+        await vi.advanceTimersByTimeAsync(VOICE_ALERT_HEARTBEAT_MS);
+        const heartbeat = await reader.read();
+        const payload = decoder.decode(heartbeat.value);
+
+        expect(payload).toContain('"type":"heartbeat"');
+        expect(payload).toMatch(/"timestamp":\d+/);
+
+        abortController.abort();
+        const closed = await reader.read();
+        expect(closed.done).toBe(true);
+        expect(unsubscribeMock).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("stops the heartbeat timer when the body is cancelled", async () => {
+      vi.useFakeTimers();
+      try {
+        authMock.mockResolvedValueOnce({ user: { id: "user-active" } });
+        findUniqueMock.mockResolvedValueOnce({ voiceAlertsEnabled: true });
+        const unsubscribeMock = vi.fn();
+        subscribeVoiceAlertMock.mockReturnValueOnce(unsubscribeMock);
+
+        const req = new NextRequest("http://localhost:3000/api/voice-alerts/stream");
+        const res = await GET(req);
+        const reader = res.body!.getReader();
+        await reader.read();
+
+        expect(vi.getTimerCount()).toBeGreaterThan(0);
+
+        await reader.cancel();
+
+        expect(vi.getTimerCount()).toBe(0);
+        expect(unsubscribeMock).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("handles send errors gracefully if subscriber fires after controller close", async () => {
