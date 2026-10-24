@@ -205,6 +205,46 @@ describe("ArmorIQ Runtime Gatekeeper Enforcement (#1275)", () => {
     expect(result.signature).toBe(signedIntent.signature);
   });
 
+  it("denies an action when the policy requires an intent and none was supplied", async () => {
+    const result = await armorIQRuntimeGatekeeper({
+      agentId: ARMORIQ_AGENT_IDS.REMEDIATION_PATCH_GENERATOR,
+      toolCall: {
+        action: "generateUnifiedDiff",
+        targetPath: "src/api/handler.ts",
+      },
+    });
+
+    expect(result.allowed).toBe(false);
+    expect(result.status).toBe("denied");
+    expect(result.rule).toBe("deny:missing_signed_intent");
+    expect(result.verified).toBe(false);
+  });
+
+  it("denies a valid intent that was issued for a different agent", async () => {
+    const plan: ExecutionPlan = {
+      goal: "Explain an XSS finding",
+      proposedTools: ["generateExplanation"],
+    };
+    const signedIntent = declareAndSignIntent(
+      ARMORIQ_AGENT_IDS.SECURITY_EXPLANATION_STREAMER,
+      plan,
+    );
+
+    const result = await armorIQRuntimeGatekeeper({
+      agentId: ARMORIQ_AGENT_IDS.REMEDIATION_PATCH_GENERATOR,
+      signedIntent,
+      toolCall: {
+        action: "generateUnifiedDiff",
+        targetPath: "src/api/handler.ts",
+      },
+    });
+
+    expect(result.allowed).toBe(false);
+    expect(result.status).toBe("denied");
+    expect(result.rule).toBe("deny:agent_intent_mismatch");
+    expect(result.verified).toBe(true);
+  });
+
   it("blocks deviations from the signed execution plan", async () => {
     const plan: ExecutionPlan = {
       goal: "Generate unified diff patch",
