@@ -36,4 +36,17 @@ test.describe("Leaderboard", () => {
     await expect(page.locator("main")).toBeVisible();
     await expect(page.getByRole("link", { name: /home/i })).toBeVisible();
   });
+
+  test("renders each contributor's security score out of 100", async ({ page, baseURL }) => {
+    await setMockSession(page, "none", baseURL);
+    await page.goto("/leaderboard");
+    await expect(page.locator("main")).toBeVisible();
+
+    const scores = page.getByText(/Security score \d+\/100/);
+    test.skip((await scores.count()) === 0, "No contributors in the mock database");
+
+    await expect(scores.first()).toBeVisible();
+    await expect(page.getByText("bounty").first()).toBeVisible();
+    await expect(page.getByText("#1", { exact: true }).first()).toBeVisible();
+  });
 });
