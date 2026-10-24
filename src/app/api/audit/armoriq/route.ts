@@ -10,6 +10,28 @@ import { withRateLimit, TIERS } from "@/lib/middleware/rate-limit";
 
 export const dynamic = "force-dynamic";
 
+const DEFAULT_TRACE_LIMIT = 100;
+const MAX_TRACE_LIMIT = 100;
+const MAX_TRACE_OFFSET = 1_000_000;
+
+/**
+ * Parses a positive integer query parameter without letting a malformed value
+ * become a Prisma `take` or `skip`. The dashboard sends both values for its
+ * pagination controls, so they must be honoured rather than replaced with a
+ * fixed first-page query.
+ */
+function parseTraceInteger(
+  value: string | null,
+  fallback: number,
+  min: number,
+  max: number,
+): number {
+  if (value === null) return fallback;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
+
 /**
  * GET /api/audit/armoriq
  *
@@ -33,13 +55,21 @@ async function getHandler(request: NextRequest) {
     const decision = searchParams.get("decision") || undefined;
     const format = searchParams.get("format") || undefined;
     const framework = (searchParams.get("framework") as "SOC2" | "ISO27001" | "ALL") || "ALL";
+    const limit = parseTraceInteger(
+      searchParams.get("limit"),
+      DEFAULT_TRACE_LIMIT,
+      1,
+      MAX_TRACE_LIMIT,
+    );
+    const offset = parseTraceInteger(searchParams.get("offset"), 0, 0, MAX_TRACE_OFFSET);
 
     const { traces, total } = await fetchArmorIQAuditTraces({
       userId: session.user.id,
       scanJobId,
       findingId,
       decision,
-      limit: 100,
+      limit,
+      offset,
     });
 
     if (format === "compliance") {

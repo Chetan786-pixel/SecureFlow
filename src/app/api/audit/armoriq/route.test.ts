@@ -88,7 +88,55 @@ describe("GET /api/audit/armoriq", () => {
       findingId: undefined,
       decision: "ALLOW",
       limit: 100,
+      offset: 0,
     });
+  });
+
+  it("passes the dashboard limit and offset through to the trace query", async () => {
+    authMock.mockResolvedValueOnce({ user: { id: "user-123" } });
+    fetchTracesMock.mockResolvedValueOnce({ traces: [], total: 42 });
+
+    const req = new NextRequest(
+      "http://localhost:3000/api/audit/armoriq?limit=10&offset=20&decision=BLOCK",
+    );
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    expect(fetchTracesMock).toHaveBeenCalledWith({
+      scanJobId: undefined,
+      findingId: undefined,
+      decision: "BLOCK",
+      limit: 10,
+      offset: 20,
+    });
+  });
+
+  it("clamps pagination values instead of passing malformed numbers to Prisma", async () => {
+    authMock.mockResolvedValueOnce({ user: { id: "user-123" } });
+    fetchTracesMock.mockResolvedValueOnce({ traces: [], total: 0 });
+
+    const req = new NextRequest(
+      "http://localhost:3000/api/audit/armoriq?limit=1000&offset=999999999",
+    );
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    expect(fetchTracesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: 100, offset: 1_000_000 }),
+    );
+  });
+
+  it("falls back to the defaults when pagination parameters are not integers", async () => {
+    authMock.mockResolvedValueOnce({ user: { id: "user-123" } });
+    fetchTracesMock.mockResolvedValueOnce({ traces: [], total: 0 });
+
+    const req = new NextRequest("http://localhost:3000/api/audit/armoriq?limit=ten&offset=1.5");
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    expect(fetchTracesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: 100, offset: 0 }),
+    );
   });
 
   it("generates a compliance report when format=compliance is requested", async () => {
