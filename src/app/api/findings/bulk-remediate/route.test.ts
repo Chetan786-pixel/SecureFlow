@@ -254,7 +254,7 @@ describe("POST /api/findings/bulk-remediate (#814)", () => {
     expect(res.status).toBe(404);
     expect(findingFindMany).toHaveBeenCalled();
   });
-  
+
   it("reports the number of patch rows the database actually updated", async () => {
     findingFindMany.mockResolvedValue([
       { id: "f-1", type: "SECRET" },
