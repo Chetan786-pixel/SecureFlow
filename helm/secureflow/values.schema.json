@@ -91,55 +91,7 @@
           }
         },
         "resources": {
-          "type": "object",
-          "properties": {
-            "limits": {
-              "type": "object",
-              "properties": {
-                "cpu": {
-                  "type": [
-                    "string",
-                    "number"
-                  ]
-                },
-                "memory": {
-                  "type": [
-                    "string",
-                    "number"
-                  ]
-                }
-              },
-              "additionalProperties": {
-                "type": [
-                  "string",
-                  "number"
-                ]
-              }
-            },
-            "requests": {
-              "type": "object",
-              "properties": {
-                "cpu": {
-                  "type": [
-                    "string",
-                    "number"
-                  ]
-                },
-                "memory": {
-                  "type": [
-                    "string",
-                    "number"
-                  ]
-                }
-              },
-              "additionalProperties": {
-                "type": [
-                  "string",
-                  "number"
-                ]
-              }
-            }
-          }
+          "$ref": "#/definitions/workloadResources"
         },
         "autoscaling": {
           "type": "object",
@@ -382,7 +334,10 @@
           }
         }
       },
-      "description": "Next.js web application deployment."
+      "description": "Next.js web application deployment.",
+      "required": [
+        "resources"
+      ]
     },
     "serviceMonitor": {
       "type": "object",
@@ -498,55 +453,7 @@
           }
         },
         "resources": {
-          "type": "object",
-          "properties": {
-            "limits": {
-              "type": "object",
-              "properties": {
-                "cpu": {
-                  "type": [
-                    "string",
-                    "number"
-                  ]
-                },
-                "memory": {
-                  "type": [
-                    "string",
-                    "number"
-                  ]
-                }
-              },
-              "additionalProperties": {
-                "type": [
-                  "string",
-                  "number"
-                ]
-              }
-            },
-            "requests": {
-              "type": "object",
-              "properties": {
-                "cpu": {
-                  "type": [
-                    "string",
-                    "number"
-                  ]
-                },
-                "memory": {
-                  "type": [
-                    "string",
-                    "number"
-                  ]
-                }
-              },
-              "additionalProperties": {
-                "type": [
-                  "string",
-                  "number"
-                ]
-              }
-            }
-          }
+          "$ref": "#/definitions/workloadResources"
         },
         "autoscaling": {
           "type": "object",
@@ -790,7 +697,10 @@
           }
         }
       },
-      "description": "Background scanning worker deployment."
+      "description": "Background scanning worker deployment.",
+      "required": [
+        "resources"
+      ]
     },
     "migration": {
       "type": "object",
@@ -828,58 +738,13 @@
           "minimum": 0
         },
         "resources": {
-          "type": "object",
-          "properties": {
-            "limits": {
-              "type": "object",
-              "properties": {
-                "cpu": {
-                  "type": [
-                    "string",
-                    "number"
-                  ]
-                },
-                "memory": {
-                  "type": [
-                    "string",
-                    "number"
-                  ]
-                }
-              },
-              "additionalProperties": {
-                "type": [
-                  "string",
-                  "number"
-                ]
-              }
-            },
-            "requests": {
-              "type": "object",
-              "properties": {
-                "cpu": {
-                  "type": [
-                    "string",
-                    "number"
-                  ]
-                },
-                "memory": {
-                  "type": [
-                    "string",
-                    "number"
-                  ]
-                }
-              },
-              "additionalProperties": {
-                "type": [
-                  "string",
-                  "number"
-                ]
-              }
-            }
-          }
+          "$ref": "#/definitions/workloadResources"
         }
       },
-      "description": "Database migration hook job."
+      "description": "Database migration hook job.",
+      "required": [
+        "resources"
+      ]
     },
     "retention": {
       "type": "object",
@@ -924,58 +789,13 @@
           }
         },
         "resources": {
-          "type": "object",
-          "properties": {
-            "limits": {
-              "type": "object",
-              "properties": {
-                "cpu": {
-                  "type": [
-                    "string",
-                    "number"
-                  ]
-                },
-                "memory": {
-                  "type": [
-                    "string",
-                    "number"
-                  ]
-                }
-              },
-              "additionalProperties": {
-                "type": [
-                  "string",
-                  "number"
-                ]
-              }
-            },
-            "requests": {
-              "type": "object",
-              "properties": {
-                "cpu": {
-                  "type": [
-                    "string",
-                    "number"
-                  ]
-                },
-                "memory": {
-                  "type": [
-                    "string",
-                    "number"
-                  ]
-                }
-              },
-              "additionalProperties": {
-                "type": [
-                  "string",
-                  "number"
-                ]
-              }
-            }
-          }
+          "$ref": "#/definitions/workloadResources"
         }
       },
-      "description": "Scheduled data retention job."
+      "description": "Scheduled data retention job.",
+      "required": [
+        "resources"
+      ]
     },
     "ingress": {
       "type": "object",
@@ -1336,55 +1156,7 @@
           }
         },
         "resources": {
-          "type": "object",
-          "properties": {
-            "limits": {
-              "type": "object",
-              "properties": {
-                "cpu": {
-                  "type": [
-                    "string",
-                    "number"
-                  ]
-                },
-                "memory": {
-                  "type": [
-                    "string",
-                    "number"
-                  ]
-                }
-              },
-              "additionalProperties": {
-                "type": [
-                  "string",
-                  "number"
-                ]
-              }
-            },
-            "requests": {
-              "type": "object",
-              "properties": {
-                "cpu": {
-                  "type": [
-                    "string",
-                    "number"
-                  ]
-                },
-                "memory": {
-                  "type": [
-                    "string",
-                    "number"
-                  ]
-                }
-              },
-              "additionalProperties": {
-                "type": [
-                  "string",
-                  "number"
-                ]
-              }
-            }
-          }
+          "$ref": "#/definitions/workloadResources"
         },
         "podDisruptionBudget": {
           "type": "object",
@@ -1441,7 +1213,10 @@
           }
         }
       },
-      "description": "In-cluster PostgreSQL or an external database."
+      "description": "In-cluster PostgreSQL or an external database.",
+      "required": [
+        "resources"
+      ]
     },
     "redis": {
       "type": "object",
@@ -1494,55 +1269,7 @@
           }
         },
         "resources": {
-          "type": "object",
-          "properties": {
-            "limits": {
-              "type": "object",
-              "properties": {
-                "cpu": {
-                  "type": [
-                    "string",
-                    "number"
-                  ]
-                },
-                "memory": {
-                  "type": [
-                    "string",
-                    "number"
-                  ]
-                }
-              },
-              "additionalProperties": {
-                "type": [
-                  "string",
-                  "number"
-                ]
-              }
-            },
-            "requests": {
-              "type": "object",
-              "properties": {
-                "cpu": {
-                  "type": [
-                    "string",
-                    "number"
-                  ]
-                },
-                "memory": {
-                  "type": [
-                    "string",
-                    "number"
-                  ]
-                }
-              },
-              "additionalProperties": {
-                "type": [
-                  "string",
-                  "number"
-                ]
-              }
-            }
-          }
+          "$ref": "#/definitions/workloadResources"
         },
         "podDisruptionBudget": {
           "type": "object",
@@ -1579,7 +1306,10 @@
           }
         }
       },
-      "description": "In-cluster Redis or an external Redis service."
+      "description": "In-cluster Redis or an external Redis service.",
+      "required": [
+        "resources"
+      ]
     },
     "serviceAccount": {
       "type": "object",
@@ -1825,6 +1555,59 @@
         }
       },
       "description": "Metrics Service settings used by the optional ServiceMonitor."
+    }
+  },
+  "definitions": {
+    "resourceQuantity": {
+      "description": "Kubernetes quantity, e.g. 250m, 512Mi, 2Gi, or a positive number.",
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^([0-9]+(\\.[0-9]+)?|\\.[0-9]+)(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?$"
+        },
+        {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      ]
+    },
+    "resourceList": {
+      "type": "object",
+      "properties": {
+        "cpu": {
+          "$ref": "#/definitions/resourceQuantity"
+        },
+        "memory": {
+          "$ref": "#/definitions/resourceQuantity"
+        },
+        "ephemeral-storage": {
+          "$ref": "#/definitions/resourceQuantity"
+        }
+      },
+      "required": [
+        "cpu",
+        "memory"
+      ],
+      "additionalProperties": {
+        "$ref": "#/definitions/resourceQuantity"
+      }
+    },
+    "workloadResources": {
+      "type": "object",
+      "description": "Container resource requests and limits. Both are required, each with cpu and memory.",
+      "properties": {
+        "limits": {
+          "$ref": "#/definitions/resourceList"
+        },
+        "requests": {
+          "$ref": "#/definitions/resourceList"
+        }
+      },
+      "required": [
+        "limits",
+        "requests"
+      ],
+      "additionalProperties": false
     }
   }
 }
