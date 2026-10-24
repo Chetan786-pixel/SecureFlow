@@ -264,12 +264,26 @@ describe("getClientIp — trusted proxy allowlist", () => {
     expect(ip).toBe("203.0.113.9");
   });
 
-  it("falls back to the left-most entry when every hop is a known proxy", () => {
+  it("returns the sentinel when every hop is a known proxy", () => {
     const ip = getClientIp(h({ "x-forwarded-for": "10.0.0.1, 10.0.0.2" }), {
       trustedHopCount: 1,
       trustedProxies,
     });
-    expect(ip).toBe("10.0.0.1");
+    expect(ip).toBe(UNKNOWN_CLIENT_IP);
+  });
+
+  it("does not let a caller rotate the left-most value into new buckets", () => {
+    const first = getClientIp(h({ "x-forwarded-for": "10.0.0.66, 10.0.0.7" }), {
+      trustedHopCount: 1,
+      trustedProxies,
+    });
+    const second = getClientIp(h({ "x-forwarded-for": "10.0.0.67, 10.0.0.7" }), {
+      trustedHopCount: 1,
+      trustedProxies,
+    });
+
+    expect(first).toBe(UNKNOWN_CLIENT_IP);
+    expect(second).toBe(first);
   });
 });
 

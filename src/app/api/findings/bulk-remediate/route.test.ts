@@ -1,19 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
-const { authMock, findingFindMany, patchUpsert, generatePatchMock } = vi.hoisted(() => ({
-  authMock: vi.fn(),
-  findingFindMany: vi.fn(),
-  patchUpsert: vi.fn(),
-  generatePatchMock: vi.fn(),
-}));
+const { authMock, findingFindMany, patchUpsert, patchUpdateMany, generatePatchMock } = vi.hoisted(
+  () => ({
+    authMock: vi.fn(),
+    findingFindMany: vi.fn(),
+    patchUpsert: vi.fn(),
+    patchUpdateMany: vi.fn(),
+    generatePatchMock: vi.fn(),
+  }),
+);
 
 vi.mock("@/auth", () => ({ auth: authMock }));
 
 vi.mock("@/lib/prisma", () => ({
   default: {
     finding: { findMany: findingFindMany },
-    remediationPatch: { upsert: patchUpsert },
+    remediationPatch: { upsert: patchUpsert, updateMany: patchUpdateMany },
   },
 }));
 
@@ -50,7 +53,7 @@ vi.mock("@/lib/middleware/rate-limit", () => ({
   secondsUntilReset: vi.fn(() => 60),
 }));
 
-import { POST } from "./route";
+import { POST, MAX_BULK_REQUEST_BYTES } from "./route";
 
 function makeRequest(body: unknown): NextRequest {
   return new NextRequest("http://localhost:3000/api/findings/bulk-remediate", {
@@ -117,6 +120,30 @@ describe("POST /api/findings/bulk-remediate (#814)", () => {
     );
     expect(generatePatchMock).toHaveBeenCalledTimes(1);
     expect((await res.json()).count).toBe(1);
+  });
+
+  it("rejects a streamed body over the cap before reading it all", async () => {
+    const oversized = new Uint8Array(MAX_BULK_REQUEST_BYTES + 1).fill(0x20);
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(oversized);
+        controller.close();
+      },
+    });
+    const req = new NextRequest("http://localhost:3000/api/findings/bulk-remediate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+      duplex: "half",
+    } as ConstructorParameters<typeof NextRequest>[1]);
+
+    expect(req.headers.get("content-length")).toBeNull();
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(413);
+    expect((await res.json()).error).toMatch(/maximum allowed size/i);
+    expect(findingFindMany).not.toHaveBeenCalled();
   });
 
   it("rejects more findings than one page of the dashboard can select, before any lookup", async () => {
@@ -226,6 +253,38 @@ describe("POST /api/findings/bulk-remediate (#814)", () => {
 
     expect(res.status).toBe(404);
     expect(findingFindMany).toHaveBeenCalled();
+  });
+  
+  it("reports the number of patch rows the database actually updated", async () => {
+    findingFindMany.mockResolvedValue([
+      { id: "f-1", type: "SECRET" },
+      { id: "f-2", type: "SECRET" },
+    ]);
+    patchUpdateMany.mockResolvedValueOnce({ count: 1 });
+
+    const res = await POST(makeRequest({ action: "apply", findingIds: ["f-1", "f-2"] }));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ success: true, updatedCount: 1, status: "APPLIED" });
+    expect(patchUpdateMany).toHaveBeenCalledWith({
+      where: { findingId: { in: ["f-1", "f-2"] } },
+      data: { status: "APPLIED" },
+    });
+    expect(generatePatchMock).not.toHaveBeenCalled();
+  });
+
+  it("does not claim a rollback succeeded when no patch rows matched", async () => {
+    findingFindMany.mockResolvedValue([{ id: "f-1", type: "SECRET" }]);
+    patchUpdateMany.mockResolvedValueOnce({ count: 0 });
+
+    const res = await POST(makeRequest({ action: "rollback", findingIds: ["f-1"] }));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ success: true, updatedCount: 0, status: "PENDING" });
+    expect(patchUpdateMany).toHaveBeenCalledWith({
+      where: { findingId: { in: ["f-1"] } },
+      data: { status: "PENDING" },
+    });
   });
 
   it("returns 429 when user rate limit is exceeded", async () => {

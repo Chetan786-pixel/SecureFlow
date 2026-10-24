@@ -313,7 +313,8 @@ export interface ClientIpOptions {
  *
  *  1. With a trusted-proxy allowlist configured, walk `x-forwarded-for` from the
  *     right, skipping known proxies. The first entry that is not a known proxy
- *     is the client.
+ *     is the client. If every entry is a known proxy, return
+ *     `UNKNOWN_CLIENT_IP`: the left-most entry is caller-controlled.
  *  2. Otherwise take `chain[chain.length - trustedHopCount]` — the address the
  *     outermost trusted proxy observed.
  *  3. If there is no usable chain but at least one trusted hop is configured,
@@ -344,9 +345,11 @@ export function getClientIp(headers: Headers, options: ClientIpOptions = {}): st
       for (let i = chain.length - 1; i >= 0; i--) {
         if (!isTrustedProxy(chain[i], trustedProxies)) return chain[i];
       }
-      // Every hop is a known proxy — the left-most is the closest thing to a
-      // client the chain contains.
-      return chain[0];
+      // Every entry is a known proxy. There is no untrusted hop left to name,
+      // and the only remaining value (chain[0]) is whatever the caller prepended:
+      // returning it would let a caller rotate rate-limit buckets. We learned no
+      // client identity from this request.
+      return UNKNOWN_CLIENT_IP;
     }
 
     const index = chain.length - trustedHopCount;
