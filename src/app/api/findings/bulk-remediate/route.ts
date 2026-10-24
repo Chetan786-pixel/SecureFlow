@@ -14,6 +14,9 @@ import { withErrorHandler } from "@/lib/middleware/error-handler";
 
 const MAX_BULK_REMEDIATION_FINDINGS = MAX_PAGE_SIZE;
 
+/** Actions the bulk remediation endpoint understands. */
+const BULK_REMEDIATION_ACTIONS = new Set(["generate", "apply", "rollback"]);
+
 /** Maximum allowed payload size for bulk remediation requests (128 KB). */
 export const MAX_BULK_REQUEST_BYTES = 128 * 1024;
 
@@ -152,6 +155,16 @@ const handler = async function POST(req: NextRequest) {
     }
 
     const { action, findingIds } = body;
+
+    if (
+      action !== undefined &&
+      (typeof action !== "string" || !BULK_REMEDIATION_ACTIONS.has(action))
+    ) {
+      return NextResponse.json(
+        { error: "action must be one of generate, apply, or rollback" },
+        { status: 400 },
+      );
+    }
 
     if (
       !Array.isArray(findingIds) ||

@@ -233,6 +233,28 @@ describe("POST /api/findings/bulk-remediate (#814)", () => {
     expect(patchUpsert).toHaveBeenCalledTimes(2);
   });
 
+  it.each([
+    { label: "a misspelled action", action: "aply" },
+    { label: "a non-string action", action: 123 },
+    { label: "an array action", action: ["apply"] },
+  ])("rejects $label before any lookup or AI call", async ({ action }) => {
+    const res = await POST(makeRequest({ action, findingIds: ["f-1"] }));
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/action must be one of/i);
+    expect(findingFindMany).not.toHaveBeenCalled();
+    expect(generatePatchMock).not.toHaveBeenCalled();
+  });
+
+  it("accepts an explicit generate action", async () => {
+    findingFindMany.mockResolvedValue([]);
+
+    const res = await POST(makeRequest({ action: "generate", findingIds: ["f-1"] }));
+
+    expect(res.status).toBe(404);
+    expect(findingFindMany).toHaveBeenCalled();
+  });
+  
   it("reports the number of patch rows the database actually updated", async () => {
     findingFindMany.mockResolvedValue([
       { id: "f-1", type: "SECRET" },
