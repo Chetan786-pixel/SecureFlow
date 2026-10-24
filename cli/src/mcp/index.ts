@@ -63,8 +63,21 @@ export const KNOWLEDGE_BASE: ThreatIntelligenceEntry[] = [
 /**
  * Creates and configures the SecureFlow Threat Intelligence MCP Server.
  */
-const DEFAULT_SIGNING_KEY =
-  process.env.ARMORIQ_PROOF_SIGNING_KEY || "armoriq-boundary-provenance-key-v1";
+/**
+ * Resolve the HMAC key used for MCP tool proofs.
+ *
+ * There is deliberately no built-in key. A committed default would let any
+ * reader of the repository forge proofs against a misconfigured deployment.
+ */
+function resolveSigningKey(): string {
+  const key = process.env.ARMORIQ_PROOF_SIGNING_KEY?.trim();
+  if (!key) {
+    throw new Error(
+      "ARMORIQ_PROOF_SIGNING_KEY is not configured; refusing to sign ArmorIQ proofs with a public fallback key.",
+    );
+  }
+  return key;
+}
 
 export interface IntentVerificationResult {
   verified: boolean;
@@ -121,7 +134,20 @@ export function verifyDeclaredIntent(
   const proofHash = createHash("sha256")
     .update(JSON.stringify({ toolName, args, timestamp }))
     .digest("hex");
-  const signature = createHmac("sha256", DEFAULT_SIGNING_KEY).update(proofHash).digest("hex");
+
+  let signature: string;
+  try {
+    signature = createHmac("sha256", resolveSigningKey()).update(proofHash).digest("hex");
+  } catch (error) {
+    return {
+      verified: false,
+      allowed: false,
+      reason:
+        error instanceof Error
+          ? `Action blocked by ArmorIQ: ${error.message}`
+          : "Action blocked by ArmorIQ: signing key is not configured",
+    };
+  }
 
   return {
     verified: true,

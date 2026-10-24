@@ -10,6 +10,8 @@ import {
 
 type TextContentItem = { type: string; text: string };
 
+process.env.ARMORIQ_PROOF_SIGNING_KEY ??= "test-cli-armoriq-proof-signing-key";
+
 function getTextContent(response: Awaited<ReturnType<Client["callTool"]>>): TextContentItem[] {
   expect(Array.isArray(response.content)).toBe(true);
   return response.content as TextContentItem[];
@@ -63,6 +65,23 @@ describe("cli/src/mcp (SecureFlow Threat Intelligence MCP Server)", () => {
 
       expect(result.allowed).toBe(true);
       expect(result.verified).toBe(true);
+    });
+
+    it("fails closed when no proof signing key is configured", () => {
+      const original = process.env.ARMORIQ_PROOF_SIGNING_KEY;
+      delete process.env.ARMORIQ_PROOF_SIGNING_KEY;
+
+      try {
+        const result = verifyDeclaredIntent("query_threat_intelligence", {
+          query: "SQL Injection",
+        });
+
+        expect(result.allowed).toBe(false);
+        expect(result.verified).toBe(false);
+        expect(result.reason).toMatch(/ARMORIQ_PROOF_SIGNING_KEY/);
+      } finally {
+        process.env.ARMORIQ_PROOF_SIGNING_KEY = original;
+      }
     });
 
     it("blocks adversarial prompt injection attempting to ignore instructions", () => {

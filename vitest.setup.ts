@@ -2,6 +2,10 @@ import { expect, vi } from "vitest";
 import * as matchers from "@testing-library/jest-dom/matchers";
 expect.extend(matchers);
 
+// ArmorIQ no longer ships a fallback proof-signing key. Tests that exercise
+// signing need a non-production key, just like a real deployment does.
+process.env.ARMORIQ_PROOF_SIGNING_KEY ??= "test-armoriq-proof-signing-key";
+
 // Stub @/lib/prisma so tests never open a real DB connection while preserving helper utilities.
 // NOTE: We do NOT use importOriginal() here because it triggers loading the real @/lib/prisma
 // module which cascades into @prisma/client → next-auth internals → trying to read next.config,
