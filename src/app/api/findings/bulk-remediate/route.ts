@@ -76,7 +76,7 @@ interface RemediationPatchDelegate {
     updateMany: (args: {
       where: { findingId: { in: string[] } };
       data: { status: string };
-    }) => Promise<unknown>;
+    }) => Promise<{ count: number }>;
     upsert: (args: {
       where: { findingId: string };
       update: { patchDiff: string; status: string };
@@ -204,25 +204,30 @@ const handler = async function POST(req: NextRequest) {
     // Process Apply or Rollback actions
     if (action === "apply" || action === "rollback") {
       const newStatus = action === "rollback" ? "PENDING" : "APPLIED";
+      let updatedCount = 0;
 
       if (typeof prisma.$transaction === "function") {
         await prisma.$transaction(async (tx: unknown) => {
           const client = tx as RemediationPatchDelegate;
-          await client.remediationPatch.updateMany({
+          const result = await client.remediationPatch.updateMany({
             where: { findingId: { in: uniqueIds } },
             data: { status: newStatus },
           });
+          updatedCount = result.count;
         });
       } else {
-        await (prisma as unknown as RemediationPatchDelegate).remediationPatch.updateMany({
+        const result = await (
+          prisma as unknown as RemediationPatchDelegate
+        ).remediationPatch.updateMany({
           where: { findingId: { in: uniqueIds } },
           data: { status: newStatus },
         });
+        updatedCount = result.count;
       }
 
       return NextResponse.json({
         success: true,
-        updatedCount: uniqueIds.length,
+        updatedCount,
         status: newStatus,
       });
     }
