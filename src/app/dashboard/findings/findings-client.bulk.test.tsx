@@ -298,7 +298,7 @@ describe("FindingsClient bulk remediation (#814)", () => {
 
     // Verify EventSource was connected with the correct URL route
     const es = (globalThis as any).__mockEventSourceInstance;
-    expect(es.url).toContain("/api/findings/bulk-remediate");
+    expect(es.url).toContain("/api/findings/bulk-remediate/progress");
 
     // Simulate server SSE response
     act(() => {

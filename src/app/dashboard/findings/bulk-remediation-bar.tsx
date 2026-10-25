@@ -107,7 +107,7 @@ export function BulkRemediationBar({
 
     // Construct SSE URL passing the selected finding IDs
     const idsQuery = selectedFindings.map((f) => f.id).join(",");
-    const url = `/api/findings/bulk-remediate/stream?ids=${idsQuery}&total=${count}`;
+    const url = `/api/findings/bulk-remediate/progress?total=${count}&ids=${idsQuery}`;
 
     const eventSource = new EventSource(url);
     eventSourceRef.current = eventSource;

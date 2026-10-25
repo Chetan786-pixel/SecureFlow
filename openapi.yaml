@@ -514,6 +514,60 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /api/findings/bulk-remediate/progress:
+    get:
+      summary: Stream real-time bulk remediation progress via SSE
+      description: |
+        Streams Server-Sent Events (SSE) providing real-time progress for bulk remediation jobs.
+        Delivers updates with processed count, total findings, percentage, status, and message.
+      operationId: streamBulkRemediationProgress
+      security:
+        - sessionAuth: []
+      tags:
+        - Findings
+      parameters:
+        - in: query
+          name: total
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 100
+          description: Total number of findings being remediated
+          example: 10
+        - in: query
+          name: ids
+          required: false
+          schema:
+            type: string
+          description: Comma-separated list of finding IDs being processed
+          example: "cld1a2b3c4,cld5e6f7g8"
+      responses:
+        "200":
+          description: Real-time SSE stream of bulk remediation progress
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: Event stream yielding JSON data payloads
+                example: |
+                  data: {"processed":1,"total":10,"progress":10,"status":"processing","message":"Remediating finding 1 of 10..."}
+
+                  data: {"processed":10,"total":10,"progress":100,"status":"completed","message":"Remediating finding 10 of 10..."}
+        "400":
+          description: Invalid total parameter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /api/findings:
     post:
       summary: Enqueue vulnerability scan
