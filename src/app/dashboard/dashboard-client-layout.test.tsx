@@ -59,7 +59,7 @@ describe("DashboardClientLayout component (#1446)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(nextAuth.useSession).mockReturnValue({
-      data: mockUserSession as unknown as nextAuth.Session,
+      data: mockUserSession as any,
       status: "authenticated",
       update: vi.fn(),
     });
@@ -123,7 +123,7 @@ describe("DashboardClientLayout component (#1446)", () => {
       data: {
         ...mockUserSession,
         user: { ...mockUserSession.user, roles: ["ADMIN"] },
-      } as unknown as nextAuth.Session,
+      } as any,
       status: "authenticated",
       update: vi.fn(),
     });

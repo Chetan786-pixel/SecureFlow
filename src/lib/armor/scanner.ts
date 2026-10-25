@@ -12,6 +12,7 @@ import { normalizeSeverity, type Severity } from "@/lib/severity";
 import { parseUnifiedPatch, renderNumberedLines } from "./diff";
 import { ignoreReasonFor, shouldIgnorePath } from "./ignore-rules";
 import { maskIngressFileContent, maskSecrets } from "./secret-masking";
+import { detectSecretsInFiles, mergeFindings } from "./secret-detector";
 
 export type ScanFinding = {
   type: string;
@@ -556,6 +557,7 @@ export class ArmorIQScanner {
     }
 
     let deadlineHit = false;
+    const deterministicFindings = detectSecretsInFiles(files, combinedPlaceholders);
 
     for (const file of files) {
       if (deadlineExceeded()) {
@@ -648,9 +650,15 @@ ${fileContent}
         currentBatch.length + fileContentBlock.length > MAX_COMBINED_LENGTH &&
         currentBatch.length > 0
       ) {
-        const batchFindings = await processBatch(currentBatch, currentBatchFiles);
-
-        allFindings.push(...batchFindings);
+        try {
+          const batchFindings = await processBatch(currentBatch, currentBatchFiles);
+          allFindings.push(...batchFindings);
+        } catch (error) {
+          console.warn(
+            `⚠️ LLM scan batch failed for [${currentBatchFiles.join(", ")}]. Preserving deterministic findings:`,
+            error,
+          );
+        }
 
         currentBatch = "";
         currentBatchFiles = [];
@@ -971,8 +979,15 @@ CRITICAL RULES:
     }
 
     if (currentBatch.length > 0 && !deadlineExceeded()) {
-      const batchFindings = await processBatch(currentBatch, currentBatchFiles);
-      allFindings.push(...batchFindings);
+      try {
+        const batchFindings = await processBatch(currentBatch, currentBatchFiles);
+        allFindings.push(...batchFindings);
+      } catch (error) {
+        console.warn(
+          `⚠️ LLM scan final batch failed for [${currentBatchFiles.join(", ")}]. Preserving deterministic findings:`,
+          error,
+        );
+      }
     } else if (currentBatch.length > 0) {
       deadlineHit = true;
       console.warn(
@@ -986,11 +1001,13 @@ CRITICAL RULES:
       );
     }
 
-    const suppressionResult = applyInlineSuppression(allFindings, files);
+    const combinedFindings = mergeFindings(deterministicFindings, allFindings);
+    const suppressionResult = applyInlineSuppression(combinedFindings, files);
     this.lastSuppressionResult = suppressionResult;
 
     return suppressionResult.activeFindings;
   }
 }
 
+export { detectSecretsInFiles, mergeFindings } from "./secret-detector";
 export const scanner = new ArmorIQScanner();
