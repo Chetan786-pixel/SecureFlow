@@ -1096,7 +1096,10 @@ The generic webhook routes refuse a legacy `sha256=` signature computed over the
 bare body, because it signs no timestamp and can be replayed indefinitely. Send a
 v1 signature (`t=<unix>,v1=<hex>`) or a legacy digest over `<unix>.<body>`. For
 senders that cannot change yet, `WEBHOOK_ALLOW_UNBOUND_LEGACY_SIGNATURES=true`
-accepts the bare-body form again.
+accepts the bare-body form again. While it is enabled, every request admitted
+this way logs a `[WEBHOOK_DEPRECATION]` warning (no payload, secret or signature),
+so you can find senders that still need to move to v1. The opt-in is deprecated
+and may be removed in a future release.
 
 ---
 
