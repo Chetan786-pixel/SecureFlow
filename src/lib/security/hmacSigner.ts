@@ -34,6 +34,7 @@
  */
 
 import { createHmac, timingSafeEqual } from "crypto";
+import { logger } from "@/lib/logger";
 
 /** Header name used for HMAC-SHA256 signatures. */
 export const SIGNATURE_HEADER = "X-SecureFlow-Signature";
@@ -388,6 +389,19 @@ export function admitWebhookRequest(
       status: 401,
       message: "Signature does not cover the request timestamp",
     };
+  }
+
+  // 7. The opt-in admitted a signature that covers no timestamp. Say so on
+  //    every such request, so operators can find the senders that still need
+  //    to move to v1 before the opt-in is removed. Metadata only: never log
+  //    the payload, secret or signature.
+  if (matched === "unbound") {
+    logger.warn(
+      "[WEBHOOK_DEPRECATION] Accepted a legacy signature that does not cover the timestamp " +
+        "(WEBHOOK_ALLOW_UNBOUND_LEGACY_SIGNATURES=true). Replay protection is weakened for this " +
+        "request; migrate the sender to the v1 signature format.",
+      { scheme: "legacy", bound: false },
+    );
   }
 
   return { ok: true, scheme: parsed.scheme };

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   signPayload,
   signPayloadV1,
@@ -18,6 +18,13 @@ import {
   SIGNATURE_VERSION as OUTBOUND_SIGNATURE_VERSION,
   TIMESTAMP_HEADER as OUTBOUND_TIMESTAMP_HEADER,
 } from "@/lib/queue/outbound-dispatch";
+
+const { warnMock } = vi.hoisted(() => ({ warnMock: vi.fn() }));
+vi.mock("@/lib/logger", () => ({
+  logger: { debug: vi.fn(), info: vi.fn(), warn: warnMock, error: vi.fn() },
+}));
+
+beforeEach(() => warnMock.mockClear());
 
 describe("signPayload", () => {
   it("produces a sha256= prefixed hex digest", () => {
@@ -631,5 +638,83 @@ describe("webhook signature timestamp binding regression suite", () => {
     );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.message).toContain("Invalid signature");
+  });
+
+  it("logs a deprecation warning when the opt-in admits an unbound signature", () => {
+    const ts = Math.floor(Date.now() / 1000);
+    const bareSig = signPayload(payload, secret);
+
+    const result = admitWebhookRequest(payload, secret, bareSig, String(ts), undefined, {
+      allowUnboundLegacySignatures: true,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(warnMock).toHaveBeenCalledTimes(1);
+    const [message, meta] = warnMock.mock.calls[0];
+    expect(message).toContain("WEBHOOK_DEPRECATION");
+    expect(meta).toEqual({ scheme: "legacy", bound: false });
+  });
+
+  it("never logs the payload, secret or signature in the warning", () => {
+    const ts = Math.floor(Date.now() / 1000);
+    const bareSig = signPayload(payload, secret);
+
+    admitWebhookRequest(payload, secret, bareSig, String(ts), undefined, {
+      allowUnboundLegacySignatures: true,
+    });
+
+    const logged = JSON.stringify(warnMock.mock.calls);
+    expect(logged).not.toContain(secret);
+    expect(logged).not.toContain(bareSig);
+    expect(logged).not.toContain(payload);
+  });
+
+  it("does not warn for a timestamp-bound legacy signature with the opt-in on", () => {
+    const ts = Math.floor(Date.now() / 1000);
+
+    admitWebhookRequest(payload, secret, signPayload(payload, secret, ts), String(ts), undefined, {
+      allowUnboundLegacySignatures: true,
+    });
+    expect(warnMock).not.toHaveBeenCalled();
+  });
+
+  it("does not warn for a v1 signature", () => {
+    const ts = Math.floor(Date.now() / 1000);
+
+    admitWebhookRequest(
+      payload,
+      secret,
+      signPayloadV1(payload, secret, ts),
+      String(ts),
+      undefined,
+      {
+        allowUnboundLegacySignatures: true,
+      },
+    );
+    expect(warnMock).not.toHaveBeenCalled();
+  });
+
+  it("does not warn when the unbound signature is rejected (opt-in off)", () => {
+    const ts = Math.floor(Date.now() / 1000);
+
+    const result = admitWebhookRequest(payload, secret, signPayload(payload, secret), String(ts));
+    expect(result.ok).toBe(false);
+    expect(warnMock).not.toHaveBeenCalled();
+  });
+
+  it("does not warn when the opt-in is on but the signature is invalid", () => {
+    const ts = Math.floor(Date.now() / 1000);
+
+    admitWebhookRequest(
+      payload,
+      secret,
+      signPayload(payload, "wrong-secret"),
+      String(ts),
+      undefined,
+      {
+        allowUnboundLegacySignatures: true,
+      },
+    );
+    expect(warnMock).not.toHaveBeenCalled();
   });
 });
