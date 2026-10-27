@@ -590,6 +590,49 @@ describe("GitHub webhook route", () => {
       expect(spy).not.toHaveBeenCalled();
     });
 
+    it("enqueues a pull_request.synchronize delivery exactly once and never runs the PR sync handler in the route (#885)", async () => {
+      // Regression guard for the double-processing bug: the route used to call
+      // handlePullRequestSynchronize() itself and then enqueue the same payload,
+      // so the worker processed the delivery a second time. `spyOn` cannot see
+      // a call made inside the route (the route no longer references the
+      // function), so this asserts on what the handler would have touched had it
+      // run: the repository lookup, the PR upsert, the installation client, the
+      // changed-files fetch and the SBOM enqueue.
+      const deliveryId = "delivery-885-regression";
+      const body = JSON.stringify({
+        action: "synchronize",
+        number: 42,
+        pull_request: { id: 1, number: 42, head: { sha: "abcdef123456" }, user: { login: "dev" } },
+        repository: { id: 42, name: "repo", full_name: "org/repo", owner: { login: "org" } },
+        installation: { id: 99 },
+      });
+
+      const res = await POST(
+        makeRequest(body, { "x-github-delivery": deliveryId }, "pull_request"),
+      );
+
+      expect(res.status).toBe(202);
+      expect(await res.json()).toMatchObject({ status: "queued", deliveryId });
+
+      // Single processing path: one job, keyed by the deterministic delivery ID.
+      expect(addWebhookJob).toHaveBeenCalledOnce();
+      expect(addWebhookJob).toHaveBeenCalledWith(
+        expect.objectContaining({
+          deliveryId,
+          event: "pull_request",
+          payload: expect.objectContaining({ action: "synchronize" }),
+        }),
+        expect.objectContaining({ jobId: `delivery-${deliveryId}` }),
+      );
+
+      // No synchronous PR-sync work happened inside the request.
+      expect(mockPrismaRepo.findUnique).not.toHaveBeenCalled();
+      expect(mockPrismaPR.upsert).not.toHaveBeenCalled();
+      expect(mockGetInstallationOctokit).not.toHaveBeenCalled();
+      expect(mockOctokitListFiles).not.toHaveBeenCalled();
+      expect(mockEnqueueSbomScan).not.toHaveBeenCalled();
+    });
+
     it("returns 202 and queues branch_protection_rule events", async () => {
       const body = JSON.stringify({
         action: "created",
@@ -863,6 +906,48 @@ describe("GitHub webhook route", () => {
       expect(firstOptions.dedupeKey).toBe(
         "webhook:repo-uuid-1:pr-uuid-1:commit-sha-123:package.json",
       );
+    });
+
+    it("re-enqueues the same SBOM job IDs when a delivery is retried after a partial failure (#885)", async () => {
+      // Attempt 1 enqueues the first manifest, then the queue fails on the
+      // second (Redis blip). The worker retries the whole delivery. The retry
+      // must address the same jobs by the same IDs and dedupe keys, so BullMQ
+      // collapses what already ran instead of producing a second set of SBOM
+      // scans (and with them duplicate vulnerability findings for this
+      // PR/commit).
+      mockOctokitListFiles.mockResolvedValue({
+        data: [{ filename: "package.json" }, { filename: "services/api/requirements.txt" }],
+      });
+      mockEnqueueSbomScan
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new Error("Redis unavailable"));
+
+      await handlePullRequestSynchronize(syncPayload, "delivery-retry-885"); // attempt 1
+      await handlePullRequestSynchronize(syncPayload, "delivery-retry-885"); // retry
+
+      const options = mockEnqueueSbomScan.mock.calls.map((call) => call[1]);
+      expect(options).toHaveLength(4);
+
+      const firstAttempt = options.slice(0, 2);
+      const retry = options.slice(2, 4);
+
+      // The retry addresses exactly the jobs attempt 1 did...
+      expect(retry.map((o) => o.jobId)).toEqual(firstAttempt.map((o) => o.jobId));
+      expect(retry.map((o) => o.dedupeKey)).toEqual(firstAttempt.map((o) => o.dedupeKey));
+
+      // ...so across both attempts there are only two distinct jobs, one per
+      // manifest at this head SHA, not four.
+      expect(new Set(options.map((o) => o.jobId)).size).toBe(2);
+      expect(options[0].jobId).toBe("sbom-repo-uuid-1-pr-uuid-1-commit-sha-123-package_json");
+      expect(options[1].jobId).toBe(
+        "sbom-repo-uuid-1-pr-uuid-1-commit-sha-123-services_api_requirements_txt",
+      );
+
+      // The PR record is upserted by its GitHub ID both times, never created twice.
+      expect(mockPrismaPR.upsert).toHaveBeenCalledTimes(2);
+      for (const [args] of mockPrismaPR.upsert.mock.calls) {
+        expect(args.where).toEqual({ githubId: BigInt(999) });
+      }
     });
 
     it("passes a job id without `:`, which BullMQ rejects as a custom id", async () => {
