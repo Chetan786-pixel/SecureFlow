@@ -13,20 +13,21 @@
 
 import { normalizeFindingType } from "@/lib/finding-taxonomy";
 
-export type ComplianceFramework =
-  | "OWASP"
-  | "SOC2"
-  | "PCI-DSS"
-  | "HIPAA"
-  | "ISO27001"
-  | "NIST";
+export type ComplianceFramework = "OWASP" | "SOC2" | "PCI-DSS" | "HIPAA" | "ISO27001" | "NIST";
 
 export interface ComplianceCriterion {
   id: string; // e.g. "OWASP:A03:2021-Injection" or "SOC2:CC6.1"
   framework: ComplianceFramework;
   name: string;
   description: string;
-  category: "ACCESS_CONTROL" | "CRYPTOGRAPHY" | "INJECTION" | "CONFIGURATION" | "SUPPLY_CHAIN" | "LOGGING" | "INTEGRITY";
+  category:
+    | "ACCESS_CONTROL"
+    | "CRYPTOGRAPHY"
+    | "INJECTION"
+    | "CONFIGURATION"
+    | "SUPPLY_CHAIN"
+    | "LOGGING"
+    | "INTEGRITY";
 }
 
 /**
@@ -38,21 +39,24 @@ export const COMPLIANCE_CRITERIA: Readonly<Record<string, ComplianceCriterion>> 
     id: "OWASP:A01:2021",
     framework: "OWASP",
     name: "A01:2021 - Broken Access Control",
-    description: "Failures that allow unauthorized information disclosure, modification, or destruction.",
+    description:
+      "Failures that allow unauthorized information disclosure, modification, or destruction.",
     category: "ACCESS_CONTROL",
   },
   "OWASP:A02:2021": {
     id: "OWASP:A02:2021",
     framework: "OWASP",
     name: "A02:2021 - Cryptographic Failures",
-    description: "Exposure of sensitive data or hardcoded secrets and broken encryption algorithms.",
+    description:
+      "Exposure of sensitive data or hardcoded secrets and broken encryption algorithms.",
     category: "CRYPTOGRAPHY",
   },
   "OWASP:A03:2021": {
     id: "OWASP:A03:2021",
     framework: "OWASP",
     name: "A03:2021 - Injection",
-    description: "Untrusted user data processed as command/query (SQLi, Command Injection, XSS, etc.).",
+    description:
+      "Untrusted user data processed as command/query (SQLi, Command Injection, XSS, etc.).",
     category: "INJECTION",
   },
   "OWASP:A04:2021": {
@@ -66,14 +70,16 @@ export const COMPLIANCE_CRITERIA: Readonly<Record<string, ComplianceCriterion>> 
     id: "OWASP:A05:2021",
     framework: "OWASP",
     name: "A05:2021 - Security Misconfiguration",
-    description: "Insecure defaults, permissive CORS, unhardened cloud settings or debug endpoints.",
+    description:
+      "Insecure defaults, permissive CORS, unhardened cloud settings or debug endpoints.",
     category: "CONFIGURATION",
   },
   "OWASP:A06:2021": {
     id: "OWASP:A06:2021",
     framework: "OWASP",
     name: "A06:2021 - Vulnerable and Outdated Components",
-    description: "Known CVEs in dependencies, outdated packages, or vulnerable third-party libraries.",
+    description:
+      "Known CVEs in dependencies, outdated packages, or vulnerable third-party libraries.",
     category: "SUPPLY_CHAIN",
   },
   "OWASP:A07:2021": {
@@ -110,21 +116,24 @@ export const COMPLIANCE_CRITERIA: Readonly<Record<string, ComplianceCriterion>> 
     id: "SOC2:CC6.1",
     framework: "SOC2",
     name: "SOC 2 CC6.1 - Logical Access & Key Management",
-    description: "Protection of authentication credentials, API keys, and access controls against leakage.",
+    description:
+      "Protection of authentication credentials, API keys, and access controls against leakage.",
     category: "ACCESS_CONTROL",
   },
   "SOC2:CC6.6": {
     id: "SOC2:CC6.6",
     framework: "SOC2",
     name: "SOC 2 CC6.6 - Boundary Protection & Vulnerability Shielding",
-    description: "Detection and prevention of security vulnerabilities that compromise system boundaries.",
+    description:
+      "Detection and prevention of security vulnerabilities that compromise system boundaries.",
     category: "INJECTION",
   },
   "SOC2:CC6.8": {
     id: "SOC2:CC6.8",
     framework: "SOC2",
     name: "SOC 2 CC6.8 - Malicious Code Prevention",
-    description: "Prevention of unauthorized code execution, backdoors, or malicious logic insertion.",
+    description:
+      "Prevention of unauthorized code execution, backdoors, or malicious logic insertion.",
     category: "INTEGRITY",
   },
   "SOC2:CC7.1": {
@@ -138,7 +147,8 @@ export const COMPLIANCE_CRITERIA: Readonly<Record<string, ComplianceCriterion>> 
     id: "SOC2:CC7.2",
     framework: "SOC2",
     name: "SOC 2 CC7.2 - Security Incident Remediation",
-    description: "Timely remediation and triage of reported security vulnerabilities and anomalies.",
+    description:
+      "Timely remediation and triage of reported security vulnerabilities and anomalies.",
     category: "LOGGING",
   },
 
@@ -147,21 +157,24 @@ export const COMPLIANCE_CRITERIA: Readonly<Record<string, ComplianceCriterion>> 
     id: "PCI-DSS:3.4",
     framework: "PCI-DSS",
     name: "PCI-DSS 3.4 - Protection of Primary Account Data & Secrets",
-    description: "Cryptographic protection of private keys, authentication secrets, and sensitive cardholder data.",
+    description:
+      "Cryptographic protection of private keys, authentication secrets, and sensitive cardholder data.",
     category: "CRYPTOGRAPHY",
   },
   "PCI-DSS:6.4": {
     id: "PCI-DSS:6.4",
     framework: "PCI-DSS",
     name: "PCI-DSS 6.4 - Public-Facing Web Application Protection",
-    description: "Protection of public applications against automated attacks, injections, and data tampering.",
+    description:
+      "Protection of public applications against automated attacks, injections, and data tampering.",
     category: "INJECTION",
   },
   "PCI-DSS:6.5": {
     id: "PCI-DSS:6.5",
     framework: "PCI-DSS",
     name: "PCI-DSS 6.5 - Software Flaw Prevention (OWASP Alignment)",
-    description: "Mitigation of common software vulnerabilities including injections, XSS, and buffer overflows.",
+    description:
+      "Mitigation of common software vulnerabilities including injections, XSS, and buffer overflows.",
     category: "INJECTION",
   },
   "PCI-DSS:8.2": {
@@ -177,21 +190,24 @@ export const COMPLIANCE_CRITERIA: Readonly<Record<string, ComplianceCriterion>> 
     id: "HIPAA:164.312(a)(1)",
     framework: "HIPAA",
     name: "HIPAA 164.312(a)(1) - Technical Access Controls",
-    description: "Implementation of access control procedures to allow access only to authorized personnel.",
+    description:
+      "Implementation of access control procedures to allow access only to authorized personnel.",
     category: "ACCESS_CONTROL",
   },
   "HIPAA:164.312(c)(1)": {
     id: "HIPAA:164.312(c)(1)",
     framework: "HIPAA",
     name: "HIPAA 164.312(c)(1) - ePHI Integrity Protection",
-    description: "Mechanisms to corroborate that electronic protected health information has not been altered.",
+    description:
+      "Mechanisms to corroborate that electronic protected health information has not been altered.",
     category: "INTEGRITY",
   },
   "HIPAA:164.312(e)(1)": {
     id: "HIPAA:164.312(e)(1)",
     framework: "HIPAA",
     name: "HIPAA 164.312(e)(1) - Transmission Security & Encryption",
-    description: "Guarding against unauthorized access to sensitive ePHI that is transmitted over an electronic network.",
+    description:
+      "Guarding against unauthorized access to sensitive ePHI that is transmitted over an electronic network.",
     category: "CRYPTOGRAPHY",
   },
 
@@ -200,14 +216,16 @@ export const COMPLIANCE_CRITERIA: Readonly<Record<string, ComplianceCriterion>> 
     id: "ISO27001:A.8.8",
     framework: "ISO27001",
     name: "ISO 27001 A.8.8 - Management of Technical Vulnerabilities",
-    description: "Information about technical vulnerabilities of information systems being obtained, evaluated, and resolved.",
+    description:
+      "Information about technical vulnerabilities of information systems being obtained, evaluated, and resolved.",
     category: "SUPPLY_CHAIN",
   },
   "ISO27001:A.8.24": {
     id: "ISO27001:A.8.24",
     framework: "ISO27001",
     name: "ISO 27001 A.8.24 - Use of Cryptography & Secrets",
-    description: "Rules for effective use of cryptography and secret management are defined and implemented.",
+    description:
+      "Rules for effective use of cryptography and secret management are defined and implemented.",
     category: "CRYPTOGRAPHY",
   },
   "ISO27001:A.8.28": {
@@ -223,7 +241,8 @@ export const COMPLIANCE_CRITERIA: Readonly<Record<string, ComplianceCriterion>> 
     id: "NIST:SI-2",
     framework: "NIST",
     name: "NIST SP 800-53 SI-2 - Flaw Remediation",
-    description: "Identify, report, and correct system flaws and software vulnerabilities within specified timeframes.",
+    description:
+      "Identify, report, and correct system flaws and software vulnerabilities within specified timeframes.",
     category: "SUPPLY_CHAIN",
   },
   "NIST:IA-2": {
@@ -237,7 +256,8 @@ export const COMPLIANCE_CRITERIA: Readonly<Record<string, ComplianceCriterion>> 
     id: "NIST:SC-28",
     framework: "NIST",
     name: "NIST SP 800-53 SC-28 - Protection of Information at Rest",
-    description: "Protect the confidentiality and integrity of information at rest and cryptographic secrets.",
+    description:
+      "Protect the confidentiality and integrity of information at rest and cryptographic secrets.",
     category: "CRYPTOGRAPHY",
   },
 };
@@ -317,7 +337,8 @@ export function mapFindingToComplianceTags(finding: {
   }
 
   // 2. Scan explanation & code snippet for embedded CWE references
-  const fullText = `${finding.explanation || ""} ${finding.codeSnippet || ""} ${finding.type || ""}`.toLowerCase();
+  const fullText =
+    `${finding.explanation || ""} ${finding.codeSnippet || ""} ${finding.type || ""}`.toLowerCase();
   const cweMatch = fullText.match(/cwe[-_](\d+)/gi);
   if (cweMatch) {
     for (const c of cweMatch) {
@@ -346,12 +367,21 @@ export function mapFindingToComplianceTags(finding: {
     tags.add("PCI-DSS:6.4");
   } else if (category === "VULNERABILITY") {
     // Specific vulnerability heuristics from text
-    if (fullText.includes("sql") || fullText.includes("injection") || fullText.includes("xss") || fullText.includes("command")) {
+    if (
+      fullText.includes("sql") ||
+      fullText.includes("injection") ||
+      fullText.includes("xss") ||
+      fullText.includes("command")
+    ) {
       tags.add("OWASP:A03:2021");
       tags.add("PCI-DSS:6.5");
       tags.add("SOC2:CC6.6");
       tags.add("ISO27001:A.8.28");
-    } else if (fullText.includes("auth") || fullText.includes("access") || fullText.includes("permission")) {
+    } else if (
+      fullText.includes("auth") ||
+      fullText.includes("access") ||
+      fullText.includes("permission")
+    ) {
       tags.add("OWASP:A01:2021");
       tags.add("SOC2:CC6.1");
       tags.add("HIPAA:164.312(a)(1)");
@@ -362,7 +392,11 @@ export function mapFindingToComplianceTags(finding: {
     } else if (fullText.includes("deserializ") || fullText.includes("integrity")) {
       tags.add("OWASP:A08:2021");
       tags.add("SOC2:CC6.8");
-    } else if (fullText.includes("dependency") || fullText.includes("cve-") || fullText.includes("package")) {
+    } else if (
+      fullText.includes("dependency") ||
+      fullText.includes("cve-") ||
+      fullText.includes("package")
+    ) {
       tags.add("OWASP:A06:2021");
       tags.add("SOC2:CC7.1");
       tags.add("ISO27001:A.8.8");

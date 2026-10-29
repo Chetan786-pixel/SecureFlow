@@ -34,7 +34,8 @@ export const SOC2_BASELINE_PACK: ComplianceFrameworkPack = {
   id: "pack-soc2-baseline",
   name: "SOC 2 Type II Security Baseline",
   framework: "SOC2",
-  description: "Enforces zero-tolerance for critical secrets (CC6.1) and critical system vulnerabilities (CC7.1) on protected branches.",
+  description:
+    "Enforces zero-tolerance for critical secrets (CC6.1) and critical system vulnerabilities (CC7.1) on protected branches.",
   severity: "CRITICAL",
   action: "BLOCKED",
   complianceTags: ["SOC2:CC6.1", "SOC2:CC6.6", "SOC2:CC6.8", "SOC2:CC7.1"],
@@ -51,7 +52,8 @@ export const PCI_DSS_PAYMENT_PACK: ComplianceFrameworkPack = {
   id: "pack-pci-dss-v4",
   name: "PCI-DSS v4.0 Payment Security Pack",
   framework: "PCI-DSS",
-  description: "Blocks PRs with exposed keys/secrets (Req 3.4), injection vulnerabilities (Req 6.5), or authentication flaws (Req 8.2).",
+  description:
+    "Blocks PRs with exposed keys/secrets (Req 3.4), injection vulnerabilities (Req 6.5), or authentication flaws (Req 8.2).",
   severity: "CRITICAL",
   action: "BLOCKED",
   complianceTags: ["PCI-DSS:3.4", "PCI-DSS:6.4", "PCI-DSS:6.5", "PCI-DSS:8.2"],
@@ -68,7 +70,8 @@ export const OWASP_TOP10_PACK: ComplianceFrameworkPack = {
   id: "pack-owasp-top10",
   name: "OWASP Top 10 2021 Enforcer",
   framework: "OWASP",
-  description: "Blocks any PR introducing Critical or High OWASP Top 10 vulnerabilities (Injections, Broken Access, SSRF).",
+  description:
+    "Blocks any PR introducing Critical or High OWASP Top 10 vulnerabilities (Injections, Broken Access, SSRF).",
   severity: "HIGH",
   action: "BLOCKED",
   complianceTags: [
@@ -91,7 +94,8 @@ export const HIPAA_SECURITY_PACK: ComplianceFrameworkPack = {
   id: "pack-hipaa-security",
   name: "HIPAA Security Rule Guard",
   framework: "HIPAA",
-  description: "Mandates review and blocking for electronic Protected Health Information (ePHI) leakage and access control flaws.",
+  description:
+    "Mandates review and blocking for electronic Protected Health Information (ePHI) leakage and access control flaws.",
   severity: "HIGH",
   action: "REVIEW REQUIRED",
   complianceTags: ["HIPAA:164.312(a)(1)", "HIPAA:164.312(c)(1)", "HIPAA:164.312(e)(1)"],
@@ -107,7 +111,8 @@ export const ISO27001_SECURE_CODING_PACK: ComplianceFrameworkPack = {
   id: "pack-iso-27001",
   name: "ISO/IEC 27001 Secure Coding Baseline",
   framework: "ISO27001",
-  description: "Validates adherence to technical vulnerability management (A.8.8) and cryptography controls (A.8.24).",
+  description:
+    "Validates adherence to technical vulnerability management (A.8.8) and cryptography controls (A.8.24).",
   severity: "HIGH",
   action: "BLOCKED",
   complianceTags: ["ISO27001:A.8.8", "ISO27001:A.8.24", "ISO27001:A.8.28"],

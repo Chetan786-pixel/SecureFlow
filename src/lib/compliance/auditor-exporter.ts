@@ -1,10 +1,17 @@
+import prisma from "@/lib/prisma";
+import { HashChain } from "@/lib/audit/hashChain";
+import {
+  COMPLIANCE_CRITERIA,
+  getFrameworkFromTag,
+  type ComplianceFramework,
+} from "@/lib/compliance/taxonomy";
+import { enrichFindingsWithComplianceTags } from "@/lib/policies/compliance-engine";
 /**
  * Compliance Auditor Export Engine
  *
  * Aggregates PR pass/fail rates, Mean-Time-To-Remediate (MTTR), compliance framework
  * posture, and signed cryptographic ledger records from AuditEventLedger.
  */
-
 
 export interface ComplianceExportFilters {
   repositoryId?: string;
@@ -85,7 +92,9 @@ export interface AuditorComplianceDossier {
 export function calculateMTTR(
   triageRecords: Array<{ createdAt: Date; updatedAt: Date; status: string }>,
 ): { hours: number; days: number } {
-  const resolved = triageRecords.filter((t) => t.status === "RESOLVED" && t.updatedAt > t.createdAt);
+  const resolved = triageRecords.filter(
+    (t) => t.status === "RESOLVED" && t.updatedAt > t.createdAt,
+  );
   if (resolved.length === 0) {
     return { hours: 0, days: 0 };
   }
@@ -132,9 +141,7 @@ export async function getVerifiedLedgerRecords(limit = 20): Promise<{
     for (let i = 0; i < ledgerRows.length; i++) {
       const current = ledgerRows[i];
       const payloadString =
-        typeof current.payload === "string"
-          ? current.payload
-          : JSON.stringify(current.payload);
+        typeof current.payload === "string" ? current.payload : JSON.stringify(current.payload);
 
       const expectedHash = HashChain.calculateHash(
         current.previousHash,
@@ -211,7 +218,9 @@ export async function generateAuditorComplianceDossier(
     prisma.finding.findMany({
       where: {
         createdAt: { gte: fromDate, lte: toDate },
-        ...(filters.repositoryId ? { scanResult: { pullRequest: { repositoryId: filters.repositoryId } } } : {}),
+        ...(filters.repositoryId
+          ? { scanResult: { pullRequest: { repositoryId: filters.repositoryId } } }
+          : {}),
       },
       select: {
         id: true,
@@ -237,9 +246,11 @@ export async function generateAuditorComplianceDossier(
   ]);
 
   const totalPRs = pullRequests.length;
-  const passedPRs = pullRequests.filter((p) => p.status === "PASS").length;
-  const blockedPRs = pullRequests.filter((p) => p.status === "BLOCKED").length;
-  const reviewRequiredPRs = pullRequests.filter((p) => p.status === "REVIEW_REQUIRED").length;
+  const passedPRs = pullRequests.filter((p: { status: string }) => p.status === "PASS").length;
+  const blockedPRs = pullRequests.filter((p: { status: string }) => p.status === "BLOCKED").length;
+  const reviewRequiredPRs = pullRequests.filter(
+    (p: { status: string }) => p.status === "REVIEW_REQUIRED",
+  ).length;
   const prPassRate = totalPRs > 0 ? Math.round((passedPRs / totalPRs) * 1000) / 10 : 100;
 
   // Enrich findings with compliance tags
@@ -249,7 +260,14 @@ export async function generateAuditorComplianceDossier(
   const mttr = calculateMTTR(triages);
 
   // Compute Framework summaries
-  const frameworkList: ComplianceFramework[] = ["OWASP", "SOC2", "PCI-DSS", "HIPAA", "ISO27001", "NIST"];
+  const frameworkList: ComplianceFramework[] = [
+    "OWASP",
+    "SOC2",
+    "PCI-DSS",
+    "HIPAA",
+    "ISO27001",
+    "NIST",
+  ];
   const frameworkMap: Record<ComplianceFramework, FrameworkSummaryScore> = {} as any;
 
   for (const fw of frameworkList) {
@@ -285,7 +303,10 @@ export async function generateAuditorComplianceDossier(
   // Finalize framework statuses and pass rates
   for (const fw of frameworkList) {
     const entry = frameworkMap[fw];
-    if (entry.criticalFindings > 0 || (entry.highFindings > 0 && (fw === "PCI-DSS" || fw === "SOC2"))) {
+    if (
+      entry.criticalFindings > 0 ||
+      (entry.highFindings > 0 && (fw === "PCI-DSS" || fw === "SOC2"))
+    ) {
       entry.status = "FAIL";
     } else if (entry.totalFindings > 0) {
       entry.status = "WARN";
@@ -297,10 +318,15 @@ export async function generateAuditorComplianceDossier(
     const failingItems = entry.criticalFindings + entry.highFindings;
     entry.passRatePercentage =
       entry.totalFindings > 0
-        ? Math.max(0, Math.round(((entry.totalFindings - failingItems) / entry.totalFindings) * 100))
+        ? Math.max(
+            0,
+            Math.round(((entry.totalFindings - failingItems) / entry.totalFindings) * 100),
+          )
         : 100;
 
-    const controls = Object.keys(COMPLIANCE_CRITERIA).filter((k) => COMPLIANCE_CRITERIA[k].framework === fw);
+    const controls = Object.keys(COMPLIANCE_CRITERIA).filter(
+      (k) => COMPLIANCE_CRITERIA[k].framework === fw,
+    );
     entry.controlsCovered = controls.length;
   }
 
@@ -334,8 +360,10 @@ export async function generateAuditorComplianceDossier(
       reviewRequiredPullRequests: reviewRequiredPRs,
       prPassRatePercentage: prPassRate,
       totalFindings: enrichedFindings.length,
-      openFindings: enrichedFindings.length - triages.filter((t) => t.status === "RESOLVED").length,
-      resolvedFindings: triages.filter((t) => t.status === "RESOLVED").length,
+      openFindings:
+        enrichedFindings.length -
+        triages.filter((t: { status: string }) => t.status === "RESOLVED").length,
+      resolvedFindings: triages.filter((t: { status: string }) => t.status === "RESOLVED").length,
       meanTimeToRemediateHours: mttr.hours,
       meanTimeToRemediateDays: mttr.days,
     },
@@ -370,7 +398,11 @@ export function generateAuditorPdfHtml(dossier: AuditorComplianceDossier): strin
       <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">${f.framework}</td>
       <td style="padding: 8px; border: 1px solid #ddd;">
         <span style="display:inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; background: ${
-          f.status === "PASS" ? "#dcfce7; color: #15803d" : f.status === "WARN" ? "#fef9c3; color: #a16207" : "#fee2e2; color: #b91c1c"
+          f.status === "PASS"
+            ? "#dcfce7; color: #15803d"
+            : f.status === "WARN"
+              ? "#fef9c3; color: #a16207"
+              : "#fee2e2; color: #b91c1c"
         };">${f.status}</span>
       </td>
       <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${f.totalFindings}</td>

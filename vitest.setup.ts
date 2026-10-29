@@ -13,7 +13,12 @@ process.env.ARMORIQ_PROOF_SIGNING_KEY ??= "test-armoriq-proof-signing-key";
 vi.mock("@/lib/prisma", () => ({
   default: {
     user: { count: vi.fn(), findUnique: vi.fn(), findMany: vi.fn(async () => []), create: vi.fn() },
-    pullRequest: { count: vi.fn(), findUnique: vi.fn(), findMany: vi.fn(async () => []), groupBy: vi.fn() },
+    pullRequest: {
+      count: vi.fn(),
+      findUnique: vi.fn(),
+      findMany: vi.fn(async () => []),
+      groupBy: vi.fn(),
+    },
     auditLog: { count: vi.fn(), findMany: vi.fn(async () => []), create: vi.fn() },
     auditEventLedger: { findMany: vi.fn(async () => []), create: vi.fn() },
     scanResult: { aggregate: vi.fn(), findMany: vi.fn(async () => []) },
@@ -27,7 +32,6 @@ vi.mock("@/lib/prisma", () => ({
   getDatabaseConnectionString: vi.fn(() => undefined),
   getPgPoolConfig: vi.fn(() => ({})),
 }));
-
 
 // Activate the manual __mocks__/groq-sdk.ts mock for all test files.
 // That file exposes APIConnectionTimeoutError (required by scanner.ts at module level)

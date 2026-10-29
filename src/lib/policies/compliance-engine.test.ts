@@ -1,8 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  evaluateCompliancePolicies,
-  enrichFindingsWithComplianceTags,
-} from "./compliance-engine";
+import { evaluateCompliancePolicies, enrichFindingsWithComplianceTags } from "./compliance-engine";
 import {
   SOC2_BASELINE_PACK,
   PCI_DSS_PAYMENT_PACK,

@@ -1,10 +1,12 @@
+import { mapFindingToComplianceTags } from "@/lib/compliance/taxonomy";
+import { FINDING_CATEGORY_TITLE, normalizeFindingType } from "@/lib/finding-taxonomy";
+import { toStoredSeverity, type StoredSeverity } from "@/lib/severity";
 /**
  * Compliance-Enhanced SARIF 2.1.0 Exporter
  *
  * Emits SARIF documents with enriched regulatory compliance criteria
  * (OWASP, SOC 2, PCI-DSS, HIPAA, ISO 27001) attached to rule tags and results.
  */
-
 
 export type SarifLevel = "error" | "warning" | "note";
 
@@ -107,9 +109,17 @@ export function buildComplianceSarifDocument(
   for (const finding of findings) {
     const category = normalizeFindingType(finding.type);
     const severity = toStoredSeverity(finding.severity);
-    const complianceTags = finding.complianceTags && finding.complianceTags.length > 0
-      ? finding.complianceTags
-      : mapFindingToComplianceTags(finding);
+    const complianceTags =
+      finding.complianceTags && finding.complianceTags.length > 0
+        ? finding.complianceTags
+        : mapFindingToComplianceTags({
+            type: typeof finding.type === "string" ? finding.type : undefined,
+            severity: typeof finding.severity === "string" ? finding.severity : undefined,
+            explanation: finding.explanation ?? undefined,
+            codeSnippet: finding.codeSnippet ?? undefined,
+            fileLocation: finding.fileLocation ?? undefined,
+            cwe: finding.cwe,
+          });
 
     const ruleId = `SECUREFLOW-${category}-${severity}`;
 
@@ -134,8 +144,12 @@ export function buildComplianceSarifDocument(
           level: LEVEL_MAP[severity],
         },
         help: {
-          text: finding.remediation || "Review and remediate this finding according to company security guidelines.",
-          markdown: finding.remediation ? `### Remediation Guidance\n\n${finding.remediation}` : undefined,
+          text:
+            finding.remediation ||
+            "Review and remediate this finding according to company security guidelines.",
+          markdown: finding.remediation
+            ? `### Remediation Guidance\n\n${finding.remediation}`
+            : undefined,
         },
         properties: {
           tags,
@@ -150,7 +164,9 @@ export function buildComplianceSarifDocument(
     const lineStart = finding.lineStart && finding.lineStart > 0 ? finding.lineStart : 1;
     const lineEnd = finding.lineEnd && finding.lineEnd >= lineStart ? finding.lineEnd : undefined;
 
-    const messageText = finding.explanation?.trim() || `Potential ${category} vulnerability identified at ${uri}:${lineStart}`;
+    const messageText =
+      finding.explanation?.trim() ||
+      `Potential ${category} vulnerability identified at ${uri}:${lineStart}`;
 
     results.push({
       ruleId,

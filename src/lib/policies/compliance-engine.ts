@@ -7,11 +7,20 @@
 
 import { parseSeverity, isAtLeast, type Severity } from "@/lib/severity";
 import { normalizeFindingType } from "@/lib/finding-taxonomy";
-import { mapFindingToComplianceTags, getFrameworkFromTag, ComplianceFramework } from "@/lib/compliance/taxonomy";
-import { DEFAULT_COMPLIANCE_PACKS, type ComplianceFrameworkPack, type CompliancePackRuleConfig } from "./compliance-packs";
+import {
+  mapFindingToComplianceTags,
+  getFrameworkFromTag,
+  ComplianceFramework,
+} from "@/lib/compliance/taxonomy";
+import {
+  DEFAULT_COMPLIANCE_PACKS,
+  type ComplianceFrameworkPack,
+  type CompliancePackRuleConfig,
+} from "./compliance-packs";
 import type { CachedPolicy } from "./policy-cache";
 
 export interface EvaluatedFinding {
+  createdAt?: Date | string | null;
   id?: string;
   type: string;
   severity: string;
@@ -47,11 +56,14 @@ export interface ComplianceEvaluationResult {
 /**
  * Ensures findings have their complianceTags populated.
  */
-export function enrichFindingsWithComplianceTags<T extends EvaluatedFinding>(findings: T[]): Array<T & { complianceTags: string[] }> {
+export function enrichFindingsWithComplianceTags<T extends EvaluatedFinding>(
+  findings: T[],
+): Array<T & { complianceTags: string[] }> {
   return findings.map((f) => {
-    const tags = f.complianceTags && f.complianceTags.length > 0
-      ? f.complianceTags
-      : mapFindingToComplianceTags(f);
+    const tags =
+      f.complianceTags && f.complianceTags.length > 0
+        ? f.complianceTags
+        : mapFindingToComplianceTags(f);
     return {
       ...f,
       complianceTags: tags,
@@ -68,12 +80,60 @@ export function evaluateCompliancePolicies(
 ): ComplianceEvaluationResult {
   const enriched = enrichFindingsWithComplianceTags(findings);
   const frameworks: Record<ComplianceFramework, FrameworkComplianceStatus> = {
-    OWASP: { framework: "OWASP", status: "PASS", totalViolations: 0, criticalViolations: 0, highViolations: 0, mediumViolations: 0, violatedTags: [] },
-    SOC2: { framework: "SOC2", status: "PASS", totalViolations: 0, criticalViolations: 0, highViolations: 0, mediumViolations: 0, violatedTags: [] },
-    "PCI-DSS": { framework: "PCI-DSS", status: "PASS", totalViolations: 0, criticalViolations: 0, highViolations: 0, mediumViolations: 0, violatedTags: [] },
-    HIPAA: { framework: "HIPAA", status: "PASS", totalViolations: 0, criticalViolations: 0, highViolations: 0, mediumViolations: 0, violatedTags: [] },
-    ISO27001: { framework: "ISO27001", status: "PASS", totalViolations: 0, criticalViolations: 0, highViolations: 0, mediumViolations: 0, violatedTags: [] },
-    NIST: { framework: "NIST", status: "PASS", totalViolations: 0, criticalViolations: 0, highViolations: 0, mediumViolations: 0, violatedTags: [] },
+    OWASP: {
+      framework: "OWASP",
+      status: "PASS",
+      totalViolations: 0,
+      criticalViolations: 0,
+      highViolations: 0,
+      mediumViolations: 0,
+      violatedTags: [],
+    },
+    SOC2: {
+      framework: "SOC2",
+      status: "PASS",
+      totalViolations: 0,
+      criticalViolations: 0,
+      highViolations: 0,
+      mediumViolations: 0,
+      violatedTags: [],
+    },
+    "PCI-DSS": {
+      framework: "PCI-DSS",
+      status: "PASS",
+      totalViolations: 0,
+      criticalViolations: 0,
+      highViolations: 0,
+      mediumViolations: 0,
+      violatedTags: [],
+    },
+    HIPAA: {
+      framework: "HIPAA",
+      status: "PASS",
+      totalViolations: 0,
+      criticalViolations: 0,
+      highViolations: 0,
+      mediumViolations: 0,
+      violatedTags: [],
+    },
+    ISO27001: {
+      framework: "ISO27001",
+      status: "PASS",
+      totalViolations: 0,
+      criticalViolations: 0,
+      highViolations: 0,
+      mediumViolations: 0,
+      violatedTags: [],
+    },
+    NIST: {
+      framework: "NIST",
+      status: "PASS",
+      totalViolations: 0,
+      criticalViolations: 0,
+      highViolations: 0,
+      mediumViolations: 0,
+      violatedTags: [],
+    },
   };
 
   const blockedPacks = new Set<string>();
@@ -109,12 +169,17 @@ export function evaluateCompliancePolicies(
       const packTags: string[] = (pack as any).complianceTags || [];
 
       // Check if finding matches any tags of the pack
-      const matchesPack = packTags.length === 0 || finding.complianceTags.some((t) => packTags.includes(t));
+      const matchesPack =
+        packTags.length === 0 || finding.complianceTags.some((t) => packTags.includes(t));
 
       if (!matchesPack) continue;
 
       // 1. Critical Secrets Guard (e.g. SOC 2 / PCI-DSS / HIPAA)
-      if (rules.blockOnCriticalSecrets && cat === "SECRET" && (sev === "CRITICAL" || sev === "HIGH")) {
+      if (
+        rules.blockOnCriticalSecrets &&
+        cat === "SECRET" &&
+        (sev === "CRITICAL" || sev === "HIGH")
+      ) {
         isBlocked = true;
         findingCausesBlock = true;
         blockedPacks.add(pack.name);
@@ -136,7 +201,9 @@ export function evaluateCompliancePolicies(
 
       // 4. Block on specific tag lists
       if (rules.blockedComplianceTags && rules.blockedComplianceTags.length > 0) {
-        const matchesBlockedTag = finding.complianceTags.some((t) => rules.blockedComplianceTags?.includes(t));
+        const matchesBlockedTag = finding.complianceTags.some((t) =>
+          rules.blockedComplianceTags?.includes(t),
+        );
         if (matchesBlockedTag && (sev === "CRITICAL" || sev === "HIGH")) {
           isBlocked = true;
           findingCausesBlock = true;
@@ -158,7 +225,10 @@ export function evaluateCompliancePolicies(
   // Update Framework Statuses
   for (const fw of Object.keys(frameworks) as ComplianceFramework[]) {
     const entry = frameworks[fw];
-    if (entry.criticalViolations > 0 || (entry.highViolations > 0 && (fw === "PCI-DSS" || fw === "OWASP"))) {
+    if (
+      entry.criticalViolations > 0 ||
+      (entry.highViolations > 0 && (fw === "PCI-DSS" || fw === "OWASP"))
+    ) {
       entry.status = "FAIL";
     } else if (entry.totalViolations > 0) {
       entry.status = "WARN";
