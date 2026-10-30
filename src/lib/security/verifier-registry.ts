@@ -96,9 +96,7 @@ export interface SecretResolverOptions {
 }
 
 export type SecretSource =
-  | string
-  | (() => string | undefined)
-  | Array<string | (() => string | undefined)>;
+  string | (() => string | undefined) | Array<string | (() => string | undefined)>;
 
 export interface ProviderConfig {
   /** Unique provider identifier (e.g. 'github', 'stripe', 'slack', 'secureflow') */
@@ -210,11 +208,7 @@ export class GitHubSignatureVerifier implements SignatureVerifier {
     return trimmed;
   }
 
-  verify(
-    payload: string | Buffer,
-    signature: string,
-    secret: string | Buffer | KeyLike,
-  ): boolean {
+  verify(payload: string | Buffer, signature: string, secret: string | Buffer | KeyLike): boolean {
     if (typeof secret !== "string" || !secret) return false;
     const cleanSig = signature.startsWith("sha256=") ? signature.slice(7) : signature;
     if (cleanSig.length !== 64 || !/^[0-9a-fA-F]+$/.test(cleanSig)) return false;
@@ -326,15 +320,13 @@ export class SecureFlowSignatureVerifier implements SignatureVerifier {
     return { ok: true, scheme: "v1", timestamp: sigTimestamp };
   }
 
-  sign(
-    payload: string | Buffer,
-    secret: string | Buffer | KeyLike,
-    options?: SignOptions,
-  ): string {
+  sign(payload: string | Buffer, secret: string | Buffer | KeyLike, options?: SignOptions): string {
     if (typeof secret !== "string") throw new Error("Secret must be a string");
     const payloadText = typeof payload === "string" ? payload : payload.toString("utf8");
     const ts = options?.timestamp ?? Math.floor(Date.now() / 1000);
-    const digest = createHmac("sha256", secret).update(`${ts}.${payloadText}`, "utf8").digest("hex");
+    const digest = createHmac("sha256", secret)
+      .update(`${ts}.${payloadText}`, "utf8")
+      .digest("hex");
     return `t=${ts},v1=${digest}`;
   }
 }
@@ -409,15 +401,13 @@ export class StripeSignatureVerifier implements SignatureVerifier {
     return { ok: true, scheme: "stripe-v1", timestamp };
   }
 
-  sign(
-    payload: string | Buffer,
-    secret: string | Buffer | KeyLike,
-    options?: SignOptions,
-  ): string {
+  sign(payload: string | Buffer, secret: string | Buffer | KeyLike, options?: SignOptions): string {
     if (typeof secret !== "string") throw new Error("Secret must be a string");
     const payloadText = typeof payload === "string" ? payload : payload.toString("utf8");
     const ts = options?.timestamp ?? Math.floor(Date.now() / 1000);
-    const digest = createHmac("sha256", secret).update(`${ts}.${payloadText}`, "utf8").digest("hex");
+    const digest = createHmac("sha256", secret)
+      .update(`${ts}.${payloadText}`, "utf8")
+      .digest("hex");
     return `t=${ts},v1=${digest}`;
   }
 }
@@ -483,11 +473,7 @@ export class SlackSignatureVerifier implements SignatureVerifier {
     return { ok: true, scheme: "slack-v0", timestamp };
   }
 
-  sign(
-    payload: string | Buffer,
-    secret: string | Buffer | KeyLike,
-    options?: SignOptions,
-  ): string {
+  sign(payload: string | Buffer, secret: string | Buffer | KeyLike, options?: SignOptions): string {
     if (typeof secret !== "string") throw new Error("Secret must be a string");
     const payloadText = typeof payload === "string" ? payload : payload.toString("utf8");
     const ts = options?.timestamp ?? Math.floor(Date.now() / 1000);
@@ -512,11 +498,7 @@ export class GitLabTokenVerifier implements SignatureVerifier {
     return getHeader(headers, "x-gitlab-token");
   }
 
-  verify(
-    _payload: string | Buffer,
-    signature: string,
-    secret: string | Buffer | KeyLike,
-  ): boolean {
+  verify(_payload: string | Buffer, signature: string, secret: string | Buffer | KeyLike): boolean {
     if (typeof secret !== "string" || !secret) return false;
     return safeStringCompare(signature.trim(), secret.trim());
   }
@@ -557,11 +539,7 @@ export class GenericHmacVerifier implements SignatureVerifier {
     return trimmed;
   }
 
-  verify(
-    payload: string | Buffer,
-    signature: string,
-    secret: string | Buffer | KeyLike,
-  ): boolean {
+  verify(payload: string | Buffer, signature: string, secret: string | Buffer | KeyLike): boolean {
     if (typeof secret !== "string" || !secret) return false;
     let cleanSig = signature.trim();
     if (this.prefix && cleanSig.toLowerCase().startsWith(this.prefix.toLowerCase())) {
@@ -850,8 +828,7 @@ export class ProviderVerifierRegistry {
       };
     }
 
-    const replayWindowSeconds =
-      params.replayWindowSeconds ?? provider.replayWindowSeconds ?? 300;
+    const replayWindowSeconds = params.replayWindowSeconds ?? provider.replayWindowSeconds ?? 300;
 
     const options: VerificationOptions = {
       timestamp: timestamp ?? undefined,

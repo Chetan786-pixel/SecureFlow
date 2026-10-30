@@ -33,7 +33,6 @@ describe("Admin AI Health API Route (/api/admin/ai-health)", () => {
       expect(data.message || data.error).toMatch(/unauthorized/i);
     });
 
-
     it("should reject non-admin users with 401", async () => {
       mockAuth.mockResolvedValue({
         user: { id: "user-1", email: "dev@secureflow.io", roles: ["USER"] },
