@@ -1,5 +1,9 @@
 import { getAiHealthReport, getModelDisplayName, DEFAULT_PRIMARY_GROQ_MODEL } from "@/ai/telemetry";
-import { resetModelCircuitBreakers, tripModelCircuitBreaker, resetModelCircuitBreaker } from "@/ai/resilience";
+import {
+  resetModelCircuitBreakers,
+  tripModelCircuitBreaker,
+  resetModelCircuitBreaker,
+} from "@/ai/resilience";
 
 describe("AI Health Dashboard Logic & Data Shaping", () => {
   beforeEach(async () => {
@@ -34,7 +38,9 @@ describe("AI Health Dashboard Logic & Data Shaping", () => {
     const report = await getAiHealthReport();
     expect(report.primaryTripped).toBe(true);
 
-    const primary = report.models.find((m) => m.modelName === DEFAULT_PRIMARY_GROQ_MODEL || m.isPrimary);
+    const primary = report.models.find(
+      (m) => m.modelName === DEFAULT_PRIMARY_GROQ_MODEL || m.isPrimary,
+    );
     expect(primary?.circuitState).toBe("OPEN");
     expect(primary?.isHealthy).toBe(false);
 

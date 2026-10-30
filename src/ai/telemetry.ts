@@ -22,7 +22,6 @@ export const DEFAULT_FALLBACK_MODELS = [
   "groq/llama-3.1-70b-versatile",
 ] as const;
 
-
 export interface LatencySample {
   timestamp: number;
   durationMs: number;
@@ -137,7 +136,6 @@ export function getKnownModels(): string[] {
 
   return Array.from(models);
 }
-
 
 /**
  * Record an individual AI model execution attempt duration and status.

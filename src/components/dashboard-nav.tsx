@@ -35,7 +35,6 @@ const NAV_ITEMS = [
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 
-
 // ─── SidebarContent ───────────────────────────────────────────────────────────
 function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
   const pathname = usePathname();

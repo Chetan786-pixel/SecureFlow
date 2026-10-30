@@ -7,7 +7,8 @@ export const dynamic = "force-dynamic";
 
 export const metadata = {
   title: "AI Model & Circuit Breaker Health | SecureFlow",
-  description: "Real-time telemetry, sliding-window latency, and circuit breaker resilience monitoring for AI models.",
+  description:
+    "Real-time telemetry, sliding-window latency, and circuit breaker resilience monitoring for AI models.",
 };
 
 export default async function AiHealthDashboardPage() {

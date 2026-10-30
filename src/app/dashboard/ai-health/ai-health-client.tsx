@@ -4,7 +4,25 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { AiHealthReport, ModelHealthStatus, FailoverEvent } from "@/ai/telemetry";
+import type { AiHealthReport, ModelHealthStatus } from "@/ai/telemetry";
+import {
+  Activity,
+  AlertTriangle,
+  ArrowRight,
+  CheckCircle2,
+  Cpu,
+  Power,
+  RefreshCw,
+  RotateCcw,
+  Server,
+  ShieldAlert,
+  ShieldCheck,
+  Shuffle,
+  Trash2,
+  TrendingUp,
+  XCircle,
+  Zap,
+} from "lucide-react";
 
 interface AiHealthClientProps {
   initialData: AiHealthReport;
@@ -18,7 +36,10 @@ export default function AiHealthClient({ initialData, isAdmin }: AiHealthClientP
   const [autoRefreshInterval, setAutoRefreshInterval] = useState<number>(5000); // 5s default
   const [selectedModelForChart, setSelectedModelForChart] = useState<string>("all");
   const [filterFailovers, setFilterFailovers] = useState<string>("");
-  const [actionMessage, setActionMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const [actionMessage, setActionMessage] = useState<{
+    text: string;
+    type: "success" | "error";
+  } | null>(null);
 
   // Auto-clear notification messages
   useEffect(() => {
@@ -91,7 +112,8 @@ export default function AiHealthClient({ initialData, isAdmin }: AiHealthClientP
     return data.models.find((m) => m.isPrimary) || data.models[0];
   }, [data.models]);
 
-  const isPrimaryTripped = data.primaryTripped || (primaryModel && primaryModel.circuitState === "OPEN");
+  const isPrimaryTripped =
+    data.primaryTripped || (primaryModel && primaryModel.circuitState === "OPEN");
 
   // Models filtered for chart visualization
   const chartModels = useMemo(() => {
@@ -117,7 +139,10 @@ export default function AiHealthClient({ initialData, isAdmin }: AiHealthClientP
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border/40 pb-5">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <Badge variant="outline" className="font-mono text-[10px] tracking-wider uppercase border-primary/40 text-primary bg-primary/5">
+            <Badge
+              variant="outline"
+              className="font-mono text-[10px] tracking-wider uppercase border-primary/40 text-primary bg-primary/5"
+            >
               Resilience Telemetry Engine
             </Badge>
             {autoRefreshInterval > 0 && (
@@ -132,7 +157,8 @@ export default function AiHealthClient({ initialData, isAdmin }: AiHealthClientP
             AI Model & Circuit Breaker Health
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Real-time circuit breaker shields, sliding-window latency graphs, and failover switch auditing across AI models.
+            Real-time circuit breaker shields, sliding-window latency graphs, and failover switch
+            auditing across AI models.
           </p>
         </div>
 
@@ -167,7 +193,9 @@ export default function AiHealthClient({ initialData, isAdmin }: AiHealthClientP
             disabled={isRefreshing}
             className="flex items-center gap-1.5 font-mono text-xs border-border/80 hover:border-primary/50"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin text-primary" : ""}`} />
+            <RefreshCw
+              className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin text-primary" : ""}`}
+            />
             Refresh
           </Button>
 
@@ -232,11 +260,14 @@ export default function AiHealthClient({ initialData, isAdmin }: AiHealthClientP
                   </span>
                 </div>
                 <h3 className="text-lg font-bold text-white mt-1">
-                  Primary Model Circuit Breaker OPEN ({primaryModel?.displayName || primaryModel?.modelName})
+                  Primary Model Circuit Breaker OPEN (
+                  {primaryModel?.displayName || primaryModel?.modelName})
                 </h3>
                 <p className="text-sm text-zinc-300 mt-1 max-w-2xl">
-                  Primary model has tripped its failure threshold ({primaryModel?.failureThreshold || 3} consecutive errors/timeouts).
-                  Traffic is automatically failing fast to secondary and tertiary fallback models in the resilience chain.
+                  Primary model has tripped its failure threshold (
+                  {primaryModel?.failureThreshold || 3} consecutive errors/timeouts). Traffic is
+                  automatically failing fast to secondary and tertiary fallback models in the
+                  resilience chain.
                 </p>
               </div>
             </div>
@@ -310,7 +341,15 @@ export default function AiHealthClient({ initialData, isAdmin }: AiHealthClientP
               <TrendingUp className="w-3.5 h-3.5 text-primary" />
             </CardDescription>
             <CardTitle className="text-2xl font-bold font-mono mt-1">
-              <span className={data.overallErrorRate > 15 ? "text-red-400" : data.overallErrorRate > 5 ? "text-yellow-400" : "text-emerald-400"}>
+              <span
+                className={
+                  data.overallErrorRate > 15
+                    ? "text-red-400"
+                    : data.overallErrorRate > 5
+                      ? "text-yellow-400"
+                      : "text-emerald-400"
+                }
+              >
                 {data.overallErrorRate}%
               </span>
             </CardTitle>
@@ -433,13 +472,17 @@ export default function AiHealthClient({ initialData, isAdmin }: AiHealthClientP
                   {/* Metric Highlights Grid */}
                   <div className="grid grid-cols-3 gap-2 bg-background/50 rounded-lg p-2.5 border border-border/40 text-center font-mono">
                     <div>
-                      <span className="text-[10px] text-muted-foreground uppercase block">Avg Latency</span>
+                      <span className="text-[10px] text-muted-foreground uppercase block">
+                        Avg Latency
+                      </span>
                       <span className="text-xs font-bold text-foreground">
                         {model.avgLatencyMs > 0 ? `${model.avgLatencyMs}ms` : "—"}
                       </span>
                     </div>
                     <div>
-                      <span className="text-[10px] text-muted-foreground uppercase block">Error Rate</span>
+                      <span className="text-[10px] text-muted-foreground uppercase block">
+                        Error Rate
+                      </span>
                       <span
                         className={`text-xs font-bold ${
                           model.errorRate > 20
@@ -453,7 +496,9 @@ export default function AiHealthClient({ initialData, isAdmin }: AiHealthClientP
                       </span>
                     </div>
                     <div>
-                      <span className="text-[10px] text-muted-foreground uppercase block">Failures</span>
+                      <span className="text-[10px] text-muted-foreground uppercase block">
+                        Failures
+                      </span>
                       <span className="text-xs font-bold text-foreground">
                         {model.failureCount}/{model.failureThreshold}
                       </span>
@@ -470,7 +515,9 @@ export default function AiHealthClient({ initialData, isAdmin }: AiHealthClientP
                     </div>
                     <div className="flex justify-between">
                       <span>P95 Latency:</span>
-                      <span className="text-foreground">{model.p95LatencyMs > 0 ? `${model.p95LatencyMs}ms` : "—"}</span>
+                      <span className="text-foreground">
+                        {model.p95LatencyMs > 0 ? `${model.p95LatencyMs}ms` : "—"}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span>Reset Timeout:</span>
@@ -561,7 +608,8 @@ export default function AiHealthClient({ initialData, isAdmin }: AiHealthClientP
                 Failover Switch & Transition History
               </CardTitle>
               <CardDescription className="text-xs text-muted-foreground mt-0.5">
-                Chronological log of dynamic fallback switches, rate-limit trips, and recovery routing.
+                Chronological log of dynamic fallback switches, rate-limit trips, and recovery
+                routing.
               </CardDescription>
             </div>
 
@@ -583,7 +631,8 @@ export default function AiHealthClient({ initialData, isAdmin }: AiHealthClientP
               <ShieldCheck className="w-10 h-10 text-emerald-400 mx-auto mb-2 opacity-60" />
               <p className="text-sm font-medium text-foreground">No Failover Events Recorded</p>
               <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
-                AI workflows are operating normally on their primary models without requiring dynamic fallback switches.
+                AI workflows are operating normally on their primary models without requiring
+                dynamic fallback switches.
               </p>
             </div>
           ) : (
@@ -644,7 +693,13 @@ export default function AiHealthClient({ initialData, isAdmin }: AiHealthClientP
 function LatencyVisualizer({ models }: { models: ModelHealthStatus[] }) {
   // Extract all samples from provided models
   const samplesWithModel = useMemo(() => {
-    const list: Array<{ model: string; color: string; durationMs: number; timestamp: number; success: boolean }> = [];
+    const list: Array<{
+      model: string;
+      color: string;
+      durationMs: number;
+      timestamp: number;
+      success: boolean;
+    }> = [];
     const colors = ["#10b981", "#3b82f6", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4"];
 
     models.forEach((model, mIdx) => {
@@ -682,7 +737,9 @@ function LatencyVisualizer({ models }: { models: ModelHealthStatus[] }) {
   const minDuration = 0;
 
   const points = samplesWithModel.map((s, idx) => {
-    const x = padding.left + (idx / Math.max(1, samplesWithModel.length - 1)) * (width - padding.left - padding.right);
+    const x =
+      padding.left +
+      (idx / Math.max(1, samplesWithModel.length - 1)) * (width - padding.left - padding.right);
     const y =
       height -
       padding.bottom -

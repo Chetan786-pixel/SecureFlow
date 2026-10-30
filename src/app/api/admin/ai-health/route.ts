@@ -125,4 +125,3 @@ export const PATCH = withRateLimit(
   withErrorHandler(postHandler) as (req: NextRequest) => Promise<NextResponse>,
   { ...TIERS.ADMIN, keyPrefix: "admin:ai-health:patch" },
 );
-

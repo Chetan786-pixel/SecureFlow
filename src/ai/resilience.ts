@@ -63,7 +63,6 @@ export function resetModelCircuitBreakers(): void {
   modelCircuitBreakers.clear();
 }
 
-
 /**
  * Wraps an async operation with a timeout to prevent hanging on stalled local models (#988).
  */
@@ -320,7 +319,6 @@ export async function executeWithFallbackAndRetry<T, TModel extends string = str
         }
       }
     }
-
   }
 
   console.error(
