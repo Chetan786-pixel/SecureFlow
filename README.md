@@ -17,6 +17,10 @@
 > _"In this heist, we're not stealing — we're protecting."_
 > **SecureFlow automatically detects vulnerabilities, hardcoded secrets, and code flaws before they reach production.**
 
+[![Nexus Spring of Code](https://www.nsoc.in/_next/image?url=%2Fnsoc-logo-dark.webp&w=96&q=75)](https://www.nsoc.in/)
+
+Featured in Nexus Spring of Code
+
 </div>
 
 ---
