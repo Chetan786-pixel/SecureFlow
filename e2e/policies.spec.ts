@@ -21,6 +21,8 @@ test.describe("Security Policies & Guardrails Dashboard (#1352)", () => {
     // Verify compiled JSON rule preview block exists
     const codeBlock = page.locator("pre");
     await expect(codeBlock).toBeVisible();
+    // The compiled preview should contain the deny rule (merged from policies-management.spec.ts)
+    await expect(page.locator("pre").filter({ hasText: '"deny"' })).toBeVisible();
   });
 
   test("renders policy template rule cards or empty state gracefully", async ({ page }) => {
@@ -75,5 +77,10 @@ test.describe("Security Policies & Guardrails Dashboard (#1352)", () => {
         );
       }
     }
+  });
+
+  test("shows the ArmorIQ inactive notice when no API key is configured", async ({ page }) => {
+    await page.goto("/dashboard/policies");
+    await expect(page.getByText(/ArmorIQ cloud enforcement is inactive/i)).toBeVisible();
   });
 });
