@@ -14,6 +14,7 @@ async function selectHomogeneousFinding(page: Page) {
   const toolbar = page.getByTestId("findings-toolbar");
   const bulkToggle = toolbar.getByRole("button", { name: "Bulk select" });
 
+  // Retry the click in case it lands before React has hydrated.
   await expect(async () => {
     await bulkToggle.click({ timeout: 3_000 });
     await expect(toolbar.getByRole("button", { name: "Cancel bulk select" })).toBeVisible({

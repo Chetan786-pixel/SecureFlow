@@ -3,7 +3,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Users, ScrollText, ShieldAlert, ArrowLeft, Activity } from "lucide-react";
+import {
+  LayoutDashboard,
+  Users,
+  ScrollText,
+  ShieldAlert,
+  ArrowLeft,
+  Activity,
+  Cpu,
+} from "lucide-react";
 
 const ADMIN_NAV = [
   { name: "Dashboard", href: "/admin", icon: LayoutDashboard, exact: true },
